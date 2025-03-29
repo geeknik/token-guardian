@@ -106,6 +106,19 @@ Track where and how your tokens are being used across your infrastructure:
 - Access timestamps
 - Anomaly detection
 
+## CI/CD and GitHub Workflows
+
+To use the included CI/CD workflows, copy the workflow files into your GitHub repository:
+
+1. Create the `.github/workflows` directory
+2. Copy `ci-workflow.yml` to `.github/workflows/ci.yml`
+3. Copy `release-workflow.yml` to `.github/workflows/release.yml`
+
+These workflows will:
+- Run tests on multiple Node.js versions
+- Perform security scanning with CodeQL
+- Publish releases to npm
+
 ## Security
 
 TokenGuardian takes a zero-trust approach to token security. All sensitive data is encrypted at rest and in transit, and we implement defense-in-depth with multiple layers of protection.

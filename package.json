@@ -4,11 +4,22 @@
   "description": "Advanced token security, leak prevention and rotation automation for Node.js applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "prepare": "husky install"
+    "prepare": "husky install && npm run build",
+    "prepublishOnly": "npm test && npm run lint",
+    "preversion": "npm run lint",
+    "version": "npm run build && git add -A dist",
+    "postversion": "git push && git push --tags",
+    "coverage": "jest --coverage",
+    "ci": "npm run lint && npm run test && npm run build"
   },
   "keywords": [
     "security",
@@ -24,6 +35,20 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geeknik/token-guardian.git"
+  },
+  "bugs": {
+    "url": "https://github.com/geeknik/token-guardian/issues"
+  },
+  "homepage": "https://github.com/geeknik/token-guardian#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/jest": "^29.5.10",
     "@types/node": "^20.9.4",

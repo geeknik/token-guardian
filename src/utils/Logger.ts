@@ -1,83 +1,46 @@
-import winston from 'winston';
-
 /**
- * Interface for logging metadata
+ * Log levels
  */
-export interface LogMeta {
-  /**
-   * Optional error object
-   */
-  error?: Error;
-  
-  /**
-   * Optional details as key-value pairs
-   */
-  details?: Record<string, unknown>;
-  
-  /**
-   * Optional context information
-   */
-  context?: string;
-}
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
- * Logger for TokenGuardian
+ * Simple logger utility
  */
 export class Logger {
-  private logger: winston.Logger;
+  constructor(private level: LogLevel = 'info') {}
 
-  /**
-   * Creates a new Logger
-   * @param level Log level
-   */
-  constructor(level: string = 'info') {
-    this.logger = winston.createLogger({
-      level,
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.printf(({ level, message, timestamp }) => {
-          return `${timestamp} [TokenGuardian] ${level.toUpperCase()}: ${message}`;
-        })
-      ),
-      transports: [
-        new winston.transports.Console()
-      ]
-    });
+  public debug(message: string, meta?: Record<string, any>): void {
+    if (this.shouldLog('debug')) {
+      console.debug(this.format('DEBUG', message, meta));
+    }
   }
 
-  /**
-   * Logs a debug message
-   * @param message The message to log
-   * @param meta Optional metadata
-   */
-  public debug(message: string, meta?: LogMeta): void {
-    this.logger.debug(message, meta);
+  public info(message: string, meta?: Record<string, any>): void {
+    if (this.shouldLog('info')) {
+      console.info(this.format('INFO', message, meta));
+    }
   }
 
-  /**
-   * Logs an info message
-   * @param message The message to log
-   * @param meta Optional metadata
-   */
-  public info(message: string, meta?: LogMeta): void {
-    this.logger.info(message, meta);
+  public warn(message: string, meta?: Record<string, any>): void {
+    if (this.shouldLog('warn')) {
+      console.warn(this.format('WARN', message, meta));
+    }
   }
 
-  /**
-   * Logs a warning message
-   * @param message The message to log
-   * @param meta Optional metadata
-   */
-  public warn(message: string, meta?: LogMeta): void {
-    this.logger.warn(message, meta);
+  public error(message: string, meta?: Record<string, any>): void {
+    if (this.shouldLog('error')) {
+      console.error(this.format('ERROR', message, meta));
+    }
   }
 
-  /**
-   * Logs an error message
-   * @param message The message to log
-   * @param meta Optional metadata
-   */
-  public error(message: string, meta?: LogMeta): void {
-    this.logger.error(message, meta);
+  private shouldLog(level: LogLevel): boolean {
+    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+    return levels.indexOf(level) >= levels.indexOf(this.level);
+  }
+
+  private format(level: string, message: string, meta?: Record<string, any>): string {
+    const timestamp = new Date().toISOString();
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    return `[${timestamp}] ${level}: ${message}${metaStr}`;
   }
 }

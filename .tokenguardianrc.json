@@ -1,0 +1,48 @@
+{
+  "scanner": {
+    "enabled": true,
+    "entropyThreshold": 3.5,
+    "ignorePatterns": [
+      "**/*.test.{js,ts,jsx,tsx}",
+      "**/*.spec.{js,ts,jsx,tsx}",
+      "**/test/**",
+      "**/tests/**",
+      "**/__tests__/**",
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/dist/**",
+      "**/build/**"
+    ],
+    "customPatterns": []
+  },
+  "rotation": {
+    "enabled": true,
+    "interval": "7d",
+    "services": {
+      "aws": {
+        "enabled": true,
+        "region": "us-east-1"
+      },
+      "github": {
+        "enabled": true
+      },
+      "gcp": {
+        "enabled": true
+      }
+    }
+  },
+  "canary": {
+    "enabled": true,
+    "webhookUrl": "",
+    "alertEndpoints": {}
+  },
+  "fingerprinting": {
+    "enabled": true,
+    "trackUsage": true,
+    "storageMethod": "memory"
+  },
+  "logging": {
+    "level": "info",
+    "format": "json"
+  }
+} 

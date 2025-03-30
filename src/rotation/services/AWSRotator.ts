@@ -347,9 +347,10 @@ export class AWSRotator implements ServiceRotator {
    */
   private createCanonicalRequest(request: AWSRequest): string {
     // Create canonical query string
-    const canonicalQueryString = Object.keys(request.params || {})
+    const params = request.params || {};
+    const canonicalQueryString = Object.keys(params)
       .sort()
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(request.params[key])}`)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
       .join('&');
     
     // Create canonical headers

@@ -1,39 +1,24 @@
 /**
- * Results from scanning a string for potential tokens/secrets
+ * Interface for token scan results
  */
 export interface ScanResult {
-  /**
-   * Whether any potential secrets were found
-   */
-  found: boolean;
-  
-  /**
-   * Array of detected pattern matches
-   */
-  matches: {
-    /**
-     * Type of token/secret detected
-     */
-    type: string;
-    
-    /**
-     * The matched string
-     */
-    value: string;
-    
-    /**
-     * Position in the original string
-     */
-    position: number;
-    
-    /**
-     * Confidence level (0-1) that this is a real token/secret
-     */
-    confidence: number;
-  }[];
-  
-  /**
-   * Entropy level of the entire input string
-   */
+  /** Type of token found */
+  type: string;
+  /** The detected token value */
+  value: string;
+  /** Description of the token pattern */
+  description: string;
+  /** Token fingerprint (hashed value) */
+  fingerprint: string;
+  /** Calculated entropy of the token */
   entropy: number;
+  /** Location where the token was found */
+  location: {
+    /** File path */
+    file: string;
+    /** Line number */
+    line: number;
+    /** Column number */
+    column: number;
+  };
 }

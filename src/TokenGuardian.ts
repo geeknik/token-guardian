@@ -1,6 +1,5 @@
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+import { promises as fs } from 'fs';
 import { GuardianConfig } from './interfaces/GuardianConfig';
 import { TokenConfig } from './interfaces/TokenConfig';
 import { ScanResult } from './interfaces/ScanResult';
@@ -9,37 +8,47 @@ import { PatternScanner } from './scanners/PatternScanner';
 import { TokenRotator } from './rotation/TokenRotator';
 import { CanaryService } from './canary/CanaryService';
 import { TokenStore, AuditLogEntry } from './storage/TokenStore';
-import { Logger } from './utils/Logger';
+import { Logger, LogLevel } from './utils/Logger';
+import { TokenPatterns } from './scanners/TokenPatterns';
 
 /**
  * TokenGuardian - Main class that provides token protection functionality
  */
 export class TokenGuardian {
-  private config: GuardianConfig;
+  private config: GuardianConfig & { logLevel: LogLevel };
   private scanner: PatternScanner;
   private rotator: TokenRotator;
   private canaryService: CanaryService;
   private tokenStore: TokenStore;
   private logger: Logger;
+  private patterns: TokenPatterns[];
+  private rotationSchedules: Map<string, NodeJS.Timeout>;
 
   /**
    * Creates a new TokenGuardian instance
    * @param config Configuration options for TokenGuardian
    */
   constructor(config: Partial<GuardianConfig> = {}) {
+    const logLevel = config.logLevel || 'info';
+    if (logLevel !== 'debug' && logLevel !== 'info' && logLevel !== 'warn' && logLevel !== 'error') {
+      throw new Error('Invalid log level. Must be one of: debug, info, warn, error');
+    }
+
     this.config = {
       services: config.services || ['default'],
       rotationInterval: config.rotationInterval || '30d',
       canaryEnabled: config.canaryEnabled !== undefined ? config.canaryEnabled : true,
       encryptionKey: config.encryptionKey || this.generateEncryptionKey(),
-      logLevel: config.logLevel || 'info',
+      logLevel
     };
 
     this.logger = new Logger(this.config.logLevel);
-    this.scanner = new PatternScanner();
+    this.patterns = [new TokenPatterns()];
+    this.scanner = new PatternScanner(this.patterns);
     this.tokenStore = new TokenStore(this.config.encryptionKey);
-    this.rotator = new TokenRotator(this.config.services);
+    this.rotator = new TokenRotator();
     this.canaryService = new CanaryService(this.config.canaryEnabled);
+    this.rotationSchedules = new Map();
     
     this.logger.info('TokenGuardian initialized');
   }
@@ -53,13 +62,71 @@ export class TokenGuardian {
   }
 
   /**
+   * Parses an interval string to milliseconds
+   * @param interval Interval string (e.g. '30d', '6h')
+   * @returns Milliseconds
+   */
+  private parseIntervalToMs(interval: string): number {
+    const unit = interval.slice(-1);
+    const value = parseInt(interval.slice(0, -1), 10);
+    
+    switch (unit) {
+      case 'd':
+        return value * 24 * 60 * 60 * 1000;
+      case 'h':
+        return value * 60 * 60 * 1000;
+      case 'm':
+        return value * 60 * 1000;
+      case 's':
+        return value * 1000;
+      default:
+        return 30 * 24 * 60 * 60 * 1000; // Default to 30 days
+    }
+  }
+
+  /**
+   * Schedules automatic rotation for a token
+   * @param tokenName The name/identifier of the token
+   * @param serviceType The type of service the token is for
+   * @param interval Rotation interval (e.g. '30d', '6h')
+   */
+  private scheduleRotation(tokenName: string, serviceType: string, interval: string): void {
+    // Cancel any existing rotation schedule for this token
+    this.cancelRotation(tokenName);
+    
+    // Parse the interval string to milliseconds
+    const intervalMs = this.parseIntervalToMs(interval);
+    
+    // Schedule the rotation
+    const timer = setTimeout(async () => {
+      await this.rotateToken(tokenName);
+      // Reschedule after rotation
+      this.scheduleRotation(tokenName, serviceType, interval);
+    }, intervalMs);
+    
+    this.rotationSchedules.set(tokenName, timer);
+  }
+
+  /**
+   * Cancels a scheduled rotation
+   * @param tokenName The name/identifier of the token
+   */
+  private cancelRotation(tokenName: string): void {
+    const timer = this.rotationSchedules.get(tokenName);
+    if (timer) {
+      clearTimeout(timer);
+      this.rotationSchedules.delete(tokenName);
+    }
+  }
+
+  /**
    * Scans a string for potential tokens or secrets
    * @param input The string to scan
    * @returns Results of the scan
    */
-  public scanString(input: string): ScanResult {
+  public scanString(input: string): ScanResult[] {
     this.logger.debug('Scanning string for sensitive data');
-    return this.scanner.scan(input);
+    return this.scanner.scan(input, 'memory');
   }
 
   /**
@@ -80,8 +147,8 @@ export class TokenGuardian {
     };
 
     // Validate the token format
-    const scanResult = this.scanString(tokenValue);
-    if (!scanResult.matches.length && config.serviceType === 'default') {
+    const scanResults = this.scanString(tokenValue);
+    if (scanResults.length === 0 && config.serviceType === 'default') {
       this.logger.warn(`Token ${tokenName} does not match any known patterns`);
     }
 
@@ -101,7 +168,7 @@ export class TokenGuardian {
 
     // Set up rotation if enabled
     if (config.rotationEnabled) {
-      this.rotator.scheduleRotation(tokenName, config.serviceType, config.rotationInterval);
+      this.scheduleRotation(tokenName, config.serviceType, config.rotationInterval);
       this.logger.debug(`Rotation scheduled for token ${tokenName}`);
     }
 
@@ -147,7 +214,7 @@ export class TokenGuardian {
       };
     }
     
-    const result = await this.rotator.rotateToken(tokenName, tokenData.config.serviceType, tokenData.value);
+    const result = await this.rotator.rotateToken(tokenData.value);
     
     if (result.success && result.newToken) {
       // Update the stored token with the new value
@@ -190,13 +257,13 @@ export class TokenGuardian {
   public removeToken(tokenName: string): boolean {
     this.logger.info(`Removing token: ${tokenName}`);
     
-    // Cancel any scheduled rotations
-    this.rotator.cancelRotation(tokenName);
+    // Cancel any scheduled rotation
+    this.cancelRotation(tokenName);
     
-    // Remove the token from storage
+    // Remove from storage
     const removed = this.tokenStore.removeToken(tokenName);
     if (!removed) {
-      this.logger.warn(`Failed to remove token ${tokenName}`);
+      this.logger.error(`Failed to remove token ${tokenName}`);
       return false;
     }
     
@@ -205,100 +272,32 @@ export class TokenGuardian {
   }
 
   /**
-   * Installs git pre-commit hooks to scan for sensitive data
-   * @returns True if hooks were installed successfully
-   */
-  public installGitHooks(): boolean {
-    this.logger.info('Installing git pre-commit hooks');
-    
-    try {
-      
-      // Find git directory
-      let currentDir = process.cwd();
-      let gitDir = null;
-      
-      while (currentDir !== path.parse(currentDir).root) {
-        if (fs.existsSync(path.join(currentDir, '.git'))) {
-          gitDir = path.join(currentDir, '.git');
-          break;
-        }
-        currentDir = path.dirname(currentDir);
-      }
-      
-      if (!gitDir) {
-        this.logger.error('No git repository found');
-        return false;
-      }
-      
-      // Create hooks directory if it doesn't exist
-      const hooksDir = path.join(gitDir, 'hooks');
-      if (!fs.existsSync(hooksDir)) {
-        fs.mkdirSync(hooksDir, { recursive: true });
-      }
-      
-      // Create pre-commit hook
-      const preCommitPath = path.join(hooksDir, 'pre-commit');
-      const preCommitScript = `#!/bin/sh
-# TokenGuardian pre-commit hook
-# Scans staged files for potential tokens/secrets
-
-# Get staged files
-staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
-
-if [ -z "$staged_files" ]; then
-  exit 0
-fi
-
-# Run TokenGuardian scan
-node -e "
-const { TokenGuardian } = require('token-guardian');
-const fs = require('fs');
-const guardian = new TokenGuardian();
-let hasLeaks = false;
-
-const files = process.argv[1].split('\\n').filter(Boolean);
-for (const file of files) {
-  try {
-    const content = fs.readFileSync(file, 'utf8');
-    const result = guardian.scanString(content);
-    if (result.found) {
-      console.error('\\x1b[31mPotential secrets found in: ' + file + '\\x1b[0m');
-      result.matches.forEach(match => {
-        console.error(\`  - \${match.type} (confidence: \${Math.round(match.confidence * 100)}%)\`);
-      });
-      hasLeaks = true;
-    }
-  } catch (error) {
-    // Skip files that can't be read
-  }
-}
-
-if (hasLeaks) {
-  console.error('\\x1b[31mCommit aborted due to potential secrets in staged files\\x1b[0m');
-  console.error('Use \\'git commit --no-verify\\' to bypass this check');
-  process.exit(1);
-}
-" "$staged_files"
-
-exit $?`;
-      
-      fs.writeFileSync(preCommitPath, preCommitScript);
-      fs.chmodSync(preCommitPath, '755'); // Make executable
-      
-      this.logger.info('Git hooks installed successfully');
-      return true;
-    } catch (error) {
-      this.logger.error(`Failed to install git hooks: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      return false;
-    }
-  }
-
-  /**
-   * Gets the audit log for token usage
-   * @param tokenName Optional token name to filter logs
+   * Gets the audit log for a specific token or all tokens
+   * @param tokenName Optional token name to filter the log
    * @returns Array of audit log entries
    */
   public getAuditLog(tokenName?: string): AuditLogEntry[] {
     return this.tokenStore.getAuditLog(tokenName);
+  }
+
+  /**
+   * Scans a file for potential tokens or secrets
+   * @param filepath Path to the file to scan
+   * @returns Results of the scan
+   */
+  public async scanFile(filepath: string): Promise<ScanResult[]> {
+    this.logger.debug(`Scanning file: ${filepath}`);
+    const content = await fs.readFile(filepath, 'utf8');
+    return this.scanContent(content, filepath);
+  }
+
+  /**
+   * Scans content from a file for potential tokens or secrets
+   * @param content Content to scan
+   * @param filepath Original file path (for reporting)
+   * @returns Results of the scan
+   */
+  public async scanContent(content: string, filepath: string): Promise<ScanResult[]> {
+    return this.scanner.scan(content, filepath);
   }
 }

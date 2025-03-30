@@ -642,11 +642,21 @@ export class CanaryService extends EventEmitter {
    * Gets source information for alerts
    * @returns Object with source info
    */
-  private getSourceInfo(): Record<string, string> {
-    // In a real system, this would extract IP, user agent, etc.
+  private getSourceInfo(): { ipAddress: string; userAgent: string; timestamp: string; } {
+    // Get IP address from environment or request context if available
+    const ipAddress = process.env.CLIENT_IP || 
+                     (global as any).requestContext?.ip || 
+                     (global as any).requestContext?.connection?.remoteAddress ||
+                     'unknown';
+
+    // Get user agent from environment or request context if available
+    const userAgent = process.env.CLIENT_USER_AGENT || 
+                     (global as any).requestContext?.headers?.['user-agent'] ||
+                     'unknown';
+
     return {
-      ipAddress: '0.0.0.0', // Placeholder in this context
-      userAgent: 'Unknown',
+      ipAddress,
+      userAgent,
       timestamp: new Date().toISOString()
     };
   }

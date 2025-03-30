@@ -21,4 +21,14 @@ export interface RotationResult {
    * Expiration date of the new token
    */
   newExpiry: Date | null;
+
+  /**
+   * Warning messages (if any)
+   */
+  warnings?: string[];
+
+  /**
+   * Additional metadata about the rotation
+   */
+  metadata?: Record<string, any>;
 }

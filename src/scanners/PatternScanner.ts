@@ -1,60 +1,73 @@
+import { createHash } from 'crypto';
 import { ScanResult } from '../interfaces/ScanResult';
-import { TokenPatterns } from './TokenPatterns';
+import { TokenPattern } from '../interfaces/TokenPattern';
+import { Logger } from '../utils/Logger';
 
 /**
  * Scanner that detects potential tokens and secrets in strings
  */
 export class PatternScanner {
-  private patterns: TokenPatterns;
+  private patterns: TokenPattern[];
+  private logger: Logger;
 
-  constructor() {
-    this.patterns = new TokenPatterns();
+  constructor(patterns: TokenPattern[] = [], logger?: Logger) {
+    this.patterns = patterns;
+    this.logger = logger || new Logger('info');
   }
 
   /**
    * Scans a string for potential tokens or secrets
-   * @param input The string to scan
+   * @param content The string to scan
+   * @param filepath The file path of the scanned content
    * @returns Results of the scan
    */
-  public scan(input: string): ScanResult {
-    const result: ScanResult = {
-      found: false,
-      matches: [],
-      entropy: this.calculateEntropy(input)
-    };
+  public scan(content: string, filepath: string): ScanResult[] {
+    const results: ScanResult[] = [];
 
-    // Get all patterns
-    const allPatterns = this.patterns.getAllPatterns();
+    for (const pattern of this.patterns) {
+      // Ensure regex is global
+      const regex = pattern.regex instanceof RegExp ? 
+        new RegExp(pattern.regex.source, pattern.regex.flags + (pattern.regex.flags.includes('g') ? '' : 'g')) :
+        new RegExp(pattern.regex, 'g');
+      
+      const matches = content.matchAll(regex);
+      
+      for (const match of matches) {
+        const token = match[1] || match[0];
+        const entropy = this.calculateEntropy(token);
 
-    // Check each pattern
-    for (const [type, pattern] of Object.entries(allPatterns)) {
-      const regex = new RegExp(pattern, 'g');
-      let match;
-
-      while ((match = regex.exec(input)) !== null) {
-        const value = match[0];
-        const position = match.index;
-        
-        // Calculate confidence based on entropy and format
-        const entropy = this.calculateEntropy(value);
-        let confidence = entropy / 5; // Normalize to 0-1 range (roughly)
-        
-        // Adjust confidence based on known formats
-        if (type.includes('api_key') || type.includes('token')) {
-          confidence = Math.min(confidence + 0.3, 1.0);
+        // Skip if entropy is too low
+        if (entropy < pattern.entropyThreshold) {
+          continue;
         }
-        
-        result.matches.push({
-          type,
-          value,
-          position,
-          confidence
+
+        // Validate token if pattern has a validator
+        if (pattern.validate && !pattern.validate(token)) {
+          continue;
+        }
+
+        // Calculate token fingerprint
+        const fingerprint = createHash('sha256')
+          .update(token)
+          .digest('hex')
+          .substring(0, 16);
+
+        results.push({
+          type: pattern.name.toLowerCase().replace(/\s+/g, '_'),
+          value: token,
+          description: pattern.description,
+          fingerprint,
+          entropy,
+          location: {
+            file: filepath,
+            line: this.getLineNumber(content, match.index || 0),
+            column: match.index || 0
+          }
         });
       }
     }
 
-    result.found = result.matches.length > 0;
-    return result;
+    return results;
   }
 
   /**
@@ -64,21 +77,32 @@ export class PatternScanner {
    */
   private calculateEntropy(str: string): number {
     const len = str.length;
-    
-    // Count character frequencies
-    const charFreq: Record<string, number> = {};
-    for (let i = 0; i < len; i++) {
-      const char = str[i];
-      charFreq[char] = (charFreq[char] || 0) + 1;
+    const frequencies = new Map<string, number>();
+
+    // Calculate character frequencies
+    for (const char of str) {
+      frequencies.set(char, (frequencies.get(char) || 0) + 1);
     }
-    
-    // Calculate entropy
-    let entropy = 0;
-    for (const char of Object.keys(charFreq)) {
-      const freq = charFreq[char] / len;
-      entropy -= freq * Math.log2(freq);
-    }
-    
-    return entropy;
+
+    // Calculate entropy using Shannon's formula
+    return Array.from(frequencies.values()).reduce((entropy, freq) => {
+      const probability = freq / len;
+      return entropy - probability * Math.log2(probability);
+    }, 0);
+  }
+
+  /**
+   * Gets the line number for a position in text
+   * @param text The text to search in
+   * @param position The position to find the line number for
+   * @returns The line number (1-based)
+   */
+  private getLineNumber(text: string, position: number): number {
+    const lines = text.slice(0, position).split('\n');
+    return lines.length;
+  }
+
+  public addPattern(pattern: TokenPattern): void {
+    this.patterns.push(pattern);
   }
 }

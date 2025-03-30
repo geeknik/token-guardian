@@ -11,6 +11,20 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module'
+      },
+      globals: {
+        Buffer: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        __dirname: 'readonly',
+        global: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        NodeJS: 'readonly'
       }
     },
     plugins: {
@@ -18,8 +32,26 @@ export default [
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['error', { 
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_'
+      }],
       'no-console': ['warn', { allow: ['warn', 'error'] }]
+    }
+  },
+  {
+    files: ['**/*.test.ts'],
+    languageOptions: {
+      globals: {
+        jest: 'readonly',
+        describe: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly'
+      }
     }
   },
   {

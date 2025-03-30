@@ -40,6 +40,17 @@ interface AlertData {
    */
   partialToken: string;
 }
+
+/**
+ * Represents an error that occurred during canary token operations
+ */
+interface CanaryError {
+  message: string;
+  stack?: string;
+  name: string;
+  cause?: unknown;
+}
+
 /**
  * Service for managing canary tokens
  */
@@ -154,13 +165,16 @@ export class CanaryService extends EventEmitter {
         // Note: This breaks the signature, but since we're just monitoring for leaks, it's acceptable
         return `${header}.${newPayload}.${signature}`;
       } catch (error) {
-        // If JSON parsing fails, try a different approach for non-JSON JWT payloads
-        // Add canary marker to raw base64 payload
+        // Log error and handle appropriately
+        this.logError('Failed to parse JWT payload', error);
+        // Try alternative embedding method
         const modifiedPayload = this.embedBase64Marker(payload, canaryId);
         return `${header}.${modifiedPayload}.${signature}`;
       }
     } catch (error) {
-      // If anything goes wrong, return the original token
+      // Log error and handle appropriately
+      this.logError('Failed to parse JWT for canary detection', error);
+      // Continue to try other detection methods
       return token;
     }
   }
@@ -251,7 +265,8 @@ export class CanaryService extends EventEmitter {
       // Convert back to base64
       return data.toString('base64');
     } catch (error) {
-      // If decoding fails, use simpler approach
+      this.logError('Failed to decode base64 token', error);
+      // Fall back to simpler approach
       const pos = Math.floor(token.length / 4);
       return token.substring(0, pos) + 
              canaryId.substring(0, 1) + 
@@ -369,7 +384,9 @@ export class CanaryService extends EventEmitter {
           }
         }
       } catch (error) {
-        // Ignore parsing errors
+        // Log error and handle appropriately
+        this.logError('Failed to parse JWT for canary detection', error);
+        // Continue to try other detection methods
       }
     } else if (/^[A-Za-z0-9+/=]+$/.test(token)) {
       // Try base64 token detection
@@ -383,7 +400,8 @@ export class CanaryService extends EventEmitter {
           return tokenName;
         }
       } catch (error) {
-        // Ignore extraction errors
+        this.logError('Failed to extract base64 token canary', error);
+        // Continue to try other detection methods
       }
     } else if (/^[A-Fa-f0-9]+$/.test(token)) {
       // Try hex token detection
@@ -397,7 +415,8 @@ export class CanaryService extends EventEmitter {
           return tokenName;
         }
       } catch (error) {
-        // Ignore extraction errors
+        this.logError('Failed to extract hex token canary', error);
+        // Continue to try other detection methods
       }
     } else {
       // Try mixed character token detection (zero-width)
@@ -411,7 +430,8 @@ export class CanaryService extends EventEmitter {
           return tokenName;
         }
       } catch (error) {
-        // Ignore extraction errors
+        this.logError('Failed to extract mixed token canary', error);
+        // Continue to try other detection methods
       }
     }
     
@@ -495,6 +515,7 @@ export class CanaryService extends EventEmitter {
       
       return null;
     } catch (error) {
+      this.logError('Failed to extract base64 token canary', error);
       return null;
     }
   }
@@ -530,6 +551,7 @@ export class CanaryService extends EventEmitter {
       
       return null;
     } catch (error) {
+      this.logError('Failed to extract hex token canary', error);
       return null;
     }
   }
@@ -578,6 +600,7 @@ export class CanaryService extends EventEmitter {
       
       return null;
     } catch (error) {
+      this.logError('Failed to extract mixed token canary', error);
       return null;
     }
   }
@@ -736,5 +759,29 @@ export class CanaryService extends EventEmitter {
     this.on('canaryDetected', (alertData) => {
       callback(alertData.tokenName, alertData);
     });
+  }
+
+  /**
+   * Logs an error with context
+   * @param message Error context message
+   * @param error The caught error
+   */
+  private logError(message: string, error: unknown): void {
+    const errorDetails: CanaryError = {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'UnknownError',
+      cause: error instanceof Error ? error.cause : error
+    };
+    
+    // Emit error event for logging/monitoring
+    this.emit('error', {
+      context: message,
+      error: errorDetails,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Log to console for development/debugging
+    console.error(`${message}:`, errorDetails);
   }
 }

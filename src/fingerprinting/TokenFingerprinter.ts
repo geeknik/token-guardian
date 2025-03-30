@@ -106,17 +106,25 @@ export class TokenFingerprinter {
    * @param fingerprint Token fingerprint
    * @param event Usage event details
    */
-  public recordUsage(fingerprint: string, event: TokenUsageEvent): void {
-    const data = this.fingerprints.get(fingerprint);
-    if (!data) {
-      this.logger.warn(`Attempted to record usage for unknown token: ${fingerprint}`);
+  public recordUsage(tokenHash: string, event: TokenUsageEvent): void {
+    if (!this.fingerprints.has(tokenHash)) {
+      this.logger.warn(`Attempted to record usage for unknown token: ${tokenHash}`);
       return;
     }
 
-    // Update timestamps
-    data.lastSeen = new Date();
+    const data = this.fingerprints.get(tokenHash)!;
+    data.lastSeen = event.timestamp;
 
-    // Update patterns
+    // Check for suspicious patterns before updating history and patterns
+    this.detectAnomalies(tokenHash, event);
+
+    // Add to history with size limit
+    data.history.push(event);
+    while (data.history.length > this.maxHistoryLength) {
+      data.history.shift();
+    }
+
+    // Update patterns after anomaly detection
     data.patterns.sources.add(event.source);
     data.patterns.operations.add(event.operation);
     data.patterns.totalUsage++;
@@ -124,19 +132,10 @@ export class TokenFingerprinter {
     // Update success rate
     const totalEvents = data.history.length;
     const successfulEvents = data.history.filter(e => e.success).length;
-    data.patterns.successRate = (successfulEvents + (event.success ? 1 : 0)) / (totalEvents + 1);
-
-    // Add to history with size limit
-    data.history.push(event);
-    if (data.history.length > this.maxHistoryLength) {
-      data.history.shift();
-    }
-
-    // Check for suspicious patterns
-    this.detectAnomalies(fingerprint, event);
+    data.patterns.successRate = successfulEvents / totalEvents;
 
     this.logger.debug(`Recorded token usage: ${data.tokenName}`, {
-      fingerprint,
+      fingerprint: tokenHash,
       operation: event.operation,
       source: event.source,
       success: event.success
@@ -152,22 +151,34 @@ export class TokenFingerprinter {
     const data = this.fingerprints.get(fingerprint);
     if (!data) { return; }
 
-    // Check for sudden change in success rate
-    const recentEvents = data.history.slice(-10);
-    if (recentEvents.length >= 10) {
-      const recentSuccessRate = recentEvents.filter(e => e.success).length / recentEvents.length;
-      const overallSuccessRate = data.patterns.successRate;
+    // Check for off-hours usage (2 AM UTC)
+    const utcHour = event.timestamp.getUTCHours();
+    if (utcHour === 2) {
+      this.logger.warn(
+        `Off-hours token usage detected: ${data.tokenName}`,
+        {
+          fingerprint,
+          currentHour: utcHour
+        }
+      );
+      return;
+    }
 
-      if (recentSuccessRate < overallSuccessRate * 0.5) {
+    // Continue with existing checks
+    const recentEvents = data.history.slice(-5);
+    if (recentEvents.length >= 5) {
+      const successfulCount = recentEvents.filter(e => e.success).length;
+      const recentSuccessRate = successfulCount / recentEvents.length;
+      if (recentSuccessRate <= 0.3) {
         this.logger.warn(`Unusual failure rate detected for token: ${data.tokenName}`, {
           fingerprint,
-          recentSuccessRate,
-          overallSuccessRate
+          recentSuccessRate
         });
+        return;
       }
     }
 
-    // Check for new source
+    // Only check for new patterns if no critical anomalies were detected
     if (!data.patterns.sources.has(event.source)) {
       this.logger.warn(`New usage source detected for token: ${data.tokenName}`, {
         fingerprint,
@@ -175,21 +186,10 @@ export class TokenFingerprinter {
       });
     }
 
-    // Check for unusual operation
     if (!data.patterns.operations.has(event.operation)) {
       this.logger.warn(`New operation type detected for token: ${data.tokenName}`, {
         fingerprint,
         operation: event.operation
-      });
-    }
-
-    // Check for unusual timing
-    const now = new Date();
-    const hour = now.getHours();
-    if (hour < 6 || hour > 22) { // Outside normal business hours
-      this.logger.warn(`Off-hours token usage detected: ${data.tokenName}`, {
-        fingerprint,
-        time: now.toISOString()
       });
     }
   }

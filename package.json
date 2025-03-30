@@ -1,7 +1,7 @@
 {
   "name": "token-guardian",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
   "description": "A comprehensive solution for protecting and managing API tokens and secrets",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

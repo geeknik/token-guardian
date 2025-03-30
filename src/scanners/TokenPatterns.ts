@@ -14,7 +14,7 @@ export class TokenPatterns implements TokenPattern {
 
   constructor() {
     this.name = 'default';
-    this.regex = /(?:AKIA[0-9A-Z]{16})|(?:ghp_[a-zA-Z0-9]{36})|(?:eyJ[a-zA-Z0-9-_]+\.eyJ[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+)|(?:https?:)?\/\/(?:www\.)?(?:facebook|fb|twitter|instagram|linkedin)\.com\/(?:(?:\w)*#!\/)?(?:pages\/)?(?:[\w\-]*\/)*((?:[\w\-\.]+)(?:\/)?)|(?:AAEAAAD[/\\]*[*]*|TypeObject|\$type|AECD0000|rO0|H4sIA|application\/x-java-serialized-object|a:[0-9]+:|O:[0-9]+:|s:[0-9]+:)|(?:<meta[^>]+property="og:(title|type|image|url|description|site_name)"[^>]+content="([^"]+)")/;
+    this.regex = /(?:AKIA[0-9A-Z]{16})|(?:ghp_[a-zA-Z0-9]{36})|(?:eyJ[a-zA-Z0-9-_]+\.eyJ[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+)|(?:https?:)?\/\/(?:www\.)?(?:facebook|fb|twitter|instagram|linkedin)\.com\/(?:(?:\w)*#!\/)?(?:pages\/)?(?:[\w-]*\/)*((?:[\w.-]+)(?:\/)?)|(?:AAEAAAD[/\\]*[*]*|TypeObject|\$type|AECD0000|rO0|H4sIA|application\/x-java-serialized-object|a:[0-9]+:|O:[0-9]+:|s:[0-9]+:)|(?:<meta[^>]+property="og:(title|type|image|url|description|site_name)"[^>]+content="([^"]+)")/;
     this.description = 'Default pattern for common tokens, social media profiles, serialized data, and metadata';
     this.entropyThreshold = 3.5;
     this.severity = 'high';
@@ -98,7 +98,7 @@ export class TokenPatterns implements TokenPattern {
       'username': '(?i)(?:username|user|login|name)[^a-zA-Z0-9]*([\\w.+-]+)',
 
       // Social Media Profiles
-      'social_media_profile': '(?:https?:)?//(?:www\\.)?(?:facebook|fb|twitter|instagram|linkedin)\\.com/(?:(?:\\w)*#!/)?(?:pages/)?(?:[\\w\\-]*/)*((?:[\\w\\-\\.]+)(?:/)?)',
+      'social_media_profile': '(?:https?:)?//(?:www\\.)?(?:facebook|fb|twitter|instagram|linkedin)\\.com/(?:(?:\\w)*#!/)?(?:pages/)?(?:[\\w-]*/)*((?:[\\w.-]+)(?:/)?)',
 
       // Serialized Data
       'serialized_data': '(AAEAAAD[/\\\\]*[*]*|TypeObject|\\$type|AECD0000|rO0|H4sIA|application/x-java-serialized-object|a:[0-9]+:|O:[0-9]+:|s:[0-9]+:)',

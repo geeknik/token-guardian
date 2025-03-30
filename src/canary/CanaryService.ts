@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { EventEmitter } from 'events';
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 
 /**
  * Interface representing the structure of canary token alert data
@@ -357,24 +358,27 @@ export class CanaryService extends EventEmitter {
     // Check if it's a JWT
     if (token.includes('.') && token.split('.').length === 3) {
       try {
-        const payload = token.split('.')[1];
+        const decoded = jwt.decode(token, { complete: true });
+        if (!decoded || typeof decoded !== 'object') {
+          throw new Error('Invalid JWT format');
+        }
         
-        // Try standard JWT approach first
         try {
-          const decodedPayload = Buffer.from(payload, 'base64').toString('utf-8');
-          const payloadObj = JSON.parse(decodedPayload);
-          
-          if (payloadObj._cid && this.canaries.has(payloadObj._cid)) {
-            // Canary detected!
-            const tokenName = this.canaries.get(payloadObj._cid) || null;
-            if (tokenName) {
-              this.triggerAlert(tokenName, token, 'jwt_standard');
+          const payload = decoded.payload;
+          if (typeof payload === 'object' && payload !== null) {
+            const possibleCanary = this.extractJWTCanary(payload);
+            if (possibleCanary && this.canaries.has(possibleCanary)) {
+              const tokenName = this.canaries.get(possibleCanary) || null;
+              if (tokenName) {
+                this.triggerAlert(tokenName, token, 'jwt_standard');
+              }
+              return tokenName;
             }
-            return tokenName;
           }
         } catch (error) {
-          // JWT parsing failed, try binary analysis
-          const possibleCanary = this.extractBase64Marker(payload);
+          this.logError('Failed to extract JWT canary from payload', error);
+          // Try binary analysis as fallback
+          const possibleCanary = this.extractBase64Marker(token);
           if (possibleCanary && this.canaries.has(possibleCanary)) {
             const tokenName = this.canaries.get(possibleCanary) || null;
             if (tokenName) {
@@ -384,8 +388,7 @@ export class CanaryService extends EventEmitter {
           }
         }
       } catch (error) {
-        // Log error and handle appropriately
-        this.logError('Failed to parse JWT for canary detection', error);
+        this.logError('Failed to decode JWT for canary detection', error);
         // Continue to try other detection methods
       }
     } else if (/^[A-Za-z0-9+/=]+$/.test(token)) {
@@ -439,6 +442,27 @@ export class CanaryService extends EventEmitter {
   }
 
   /**
+   * Extract canary ID from JWT payload
+   * @param payload The JWT payload object
+   * @returns Extracted canary ID or null
+   */
+  private extractJWTCanary(payload: Record<string, unknown>): string | null {
+    // Check for direct canary ID in payload
+    if (payload._cid && typeof payload._cid === 'string') {
+      return payload._cid;
+    }
+
+    // Check for embedded canary in custom claims
+    for (const [, value] of Object.entries(payload)) {
+      if (typeof value === 'string' && this.canaries.has(value)) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Extract canary marker from base64 data
    * @param base64Data The base64 data to check
    * @returns Extracted canary ID or null
@@ -471,7 +495,8 @@ export class CanaryService extends EventEmitter {
       
       // Convert to string and return
       return markerBuffer.toString('utf8').replace(/\0/g, '');
-    } catch (error) {
+    } catch (extractError) {
+      this.logError('Failed to extract base64 marker', extractError);
       return null;
     }
   }
@@ -487,7 +512,9 @@ export class CanaryService extends EventEmitter {
       const data = Buffer.from(token, 'base64');
       
       // Only continue if token is long enough
-      if (data.length < 16) {return null;}
+      if (data.length < 16) {
+        return null;
+      }
       
       // Extract from 1/4 position
       const extractPos = Math.floor(data.length / 4);
@@ -514,8 +541,8 @@ export class CanaryService extends EventEmitter {
       }
       
       return null;
-    } catch (error) {
-      this.logError('Failed to extract base64 token canary', error);
+    } catch (extractError) {
+      this.logError('Failed to extract base64 token canary', extractError);
       return null;
     }
   }

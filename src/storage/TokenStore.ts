@@ -13,15 +13,19 @@ interface StoredToken {
 }
 
 /**
+/**
  * Audit log entry structure
  */
-interface AuditLogEntry {
+export interface AuditLogEntry {
   tokenName: string;
   action: string;
   timestamp: Date;
-  details?: any;
+  details?: {
+    configType?: string;
+    hasNewExpiry?: boolean;
+    [key: string]: unknown;
+  };
 }
-
 /**
  * Secure storage for protected tokens
  */
@@ -191,7 +195,7 @@ export class TokenStore {
    * @param action The action performed
    * @param details Optional details about the action
    */
-  private logAction(tokenName: string, action: string, details?: any): void {
+  private logAction(tokenName: string, action: string, details?: AuditLogEntry['details']): void {
     this.auditLog.push({
       tokenName,
       action,

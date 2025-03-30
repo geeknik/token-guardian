@@ -86,7 +86,7 @@ export class TokenRotator {
       };
     }
     
-    return await rotator.rotateToken(tokenName, currentToken);
+    return rotator.rotateToken(tokenName, currentToken);
   }
 
   /**

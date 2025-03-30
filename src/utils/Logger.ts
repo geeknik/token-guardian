@@ -1,6 +1,26 @@
 import winston from 'winston';
 
 /**
+ * Interface for logging metadata
+ */
+export interface LogMeta {
+  /**
+   * Optional error object
+   */
+  error?: Error;
+  
+  /**
+   * Optional details as key-value pairs
+   */
+  details?: Record<string, unknown>;
+  
+  /**
+   * Optional context information
+   */
+  context?: string;
+}
+
+/**
  * Logger for TokenGuardian
  */
 export class Logger {
@@ -30,7 +50,7 @@ export class Logger {
    * @param message The message to log
    * @param meta Optional metadata
    */
-  public debug(message: string, meta?: any): void {
+  public debug(message: string, meta?: LogMeta): void {
     this.logger.debug(message, meta);
   }
 
@@ -39,7 +59,7 @@ export class Logger {
    * @param message The message to log
    * @param meta Optional metadata
    */
-  public info(message: string, meta?: any): void {
+  public info(message: string, meta?: LogMeta): void {
     this.logger.info(message, meta);
   }
 
@@ -48,7 +68,7 @@ export class Logger {
    * @param message The message to log
    * @param meta Optional metadata
    */
-  public warn(message: string, meta?: any): void {
+  public warn(message: string, meta?: LogMeta): void {
     this.logger.warn(message, meta);
   }
 
@@ -57,7 +77,7 @@ export class Logger {
    * @param message The message to log
    * @param meta Optional metadata
    */
-  public error(message: string, meta?: any): void {
+  public error(message: string, meta?: LogMeta): void {
     this.logger.error(message, meta);
   }
 }

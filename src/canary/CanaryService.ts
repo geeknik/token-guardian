@@ -3,6 +3,44 @@ import { EventEmitter } from 'events';
 import axios from 'axios';
 
 /**
+ * Interface representing the structure of canary token alert data
+ */
+interface AlertData {
+  /**
+   * Name of the token that was detected
+   */
+  tokenName: string;
+  /**
+   * ISO timestamp when the alert was generated
+   */
+  timestamp: string;
+  /**
+   * Method used to detect the canary token
+   */
+  detectionMethod: string;
+  /**
+   * Information about the source of the detection
+   */
+  source: {
+    /**
+     * IP address where the token was detected
+     */
+    ipAddress: string;
+    /**
+     * User agent information
+     */
+    userAgent: string;
+    /**
+     * ISO timestamp of the detection
+     */
+    timestamp: string;
+  };
+  /**
+   * Masked/partial version of the detected token for safe logging
+   */
+  partialToken: string;
+}
+/**
  * Service for managing canary tokens
  */
 export class CanaryService extends EventEmitter {
@@ -135,7 +173,7 @@ export class CanaryService extends EventEmitter {
    */
   private embedBase64Marker(base64Data: string, marker: string): string {
     // Decode base64 to binary data
-    let binaryData = Buffer.from(base64Data, 'base64');
+    const binaryData = Buffer.from(base64Data, 'base64');
     const dataLength = binaryData.length;
     
     // Only modify if we have enough data (at least 32 bytes)
@@ -196,7 +234,7 @@ export class CanaryService extends EventEmitter {
       const data = Buffer.from(token, 'base64');
       
       // Only continue if token is long enough
-      if (data.length < 16) return token;
+      if (data.length < 16) {return token;}
       
       // Insert the canary ID at 1/4 position using LSB embedding
       const insertPos = Math.floor(data.length / 4);
@@ -396,7 +434,7 @@ export class CanaryService extends EventEmitter {
       // Decode to binary
       const binaryData = Buffer.from(fullyPadded, 'base64');
       
-      if (binaryData.length < 32) return null;
+      if (binaryData.length < 32) {return null;}
       
       // Calculate the position where we embedded the marker (1/3 into the data)
       const position = Math.floor(binaryData.length / 3);
@@ -429,7 +467,7 @@ export class CanaryService extends EventEmitter {
       const data = Buffer.from(token, 'base64');
       
       // Only continue if token is long enough
-      if (data.length < 16) return null;
+      if (data.length < 16) {return null;}
       
       // Extract from 1/4 position
       const extractPos = Math.floor(data.length / 4);
@@ -472,7 +510,7 @@ export class CanaryService extends EventEmitter {
       const pos = Math.floor(token.length * 3 / 4);
       
       // Extract 4 characters from the token
-      if (pos + 4 > token.length) return null;
+      if (pos + 4 > token.length) {return null;}
       
       const extractedHex = token.substring(pos, pos + 4).toLowerCase();
       
@@ -507,7 +545,7 @@ export class CanaryService extends EventEmitter {
       const zeroWidthRegex = /[\u200B\u200C]+/;
       const match = token.match(zeroWidthRegex);
       
-      if (!match) return null;
+      if (!match) {return null;}
       
       // Extract the zero-width characters
       const zeroWidthSequence = match[0];
@@ -630,50 +668,45 @@ export class CanaryService extends EventEmitter {
    * Sends a webhook alert
    * @param alertData Data to send in the alert
    */
-  private async sendWebhookAlert(alertData: any): Promise<void> {
-    if (!this.webhookUrl) return;
+  private async sendWebhookAlert(alertData: AlertData): Promise<void> {
+    if (!this.webhookUrl) {return;}
     
-    try {
-      await axios.post(this.webhookUrl, {
-        text: `🚨 SECURITY ALERT: Canary token detected!`,
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*SECURITY ALERT: Canary Token Detected*`
-            }
-          },
-          {
-            type: 'section',
-            fields: [
-              {
-                type: 'mrkdwn',
-                text: `*Token:* ${alertData.tokenName}`
-              },
-              {
-                type: 'mrkdwn',
-                text: `*Detected:* ${alertData.timestamp}`
-              },
-              {
-                type: 'mrkdwn',
-                text: `*Method:* ${alertData.detectionMethod}`
-              }
-            ]
-          },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*Token Fragment:* \`${alertData.partialToken}\``
-            }
+    await axios.post(this.webhookUrl, {
+      text: `🚨 SECURITY ALERT: Canary token detected!`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*SECURITY ALERT: Canary Token Detected*`
           }
-        ]
-      });
-    } catch (error) {
-      // Re-throw for handling by caller
-      throw error;
-    }
+        },
+        {
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*Token:* ${alertData.tokenName}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Detected:* ${alertData.timestamp}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Method:* ${alertData.detectionMethod}`
+            }
+          ]
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Token Fragment:* \`${alertData.partialToken}\``
+          }
+        }
+      ]
+    });
   }
 
   /**
@@ -681,20 +714,15 @@ export class CanaryService extends EventEmitter {
    * @param endpoint Endpoint URL
    * @param alertData Data to send in the alert
    */
-  private async sendEndpointAlert(endpoint: string, alertData: any): Promise<void> {
-    try {
-      await axios.post(endpoint, alertData);
-    } catch (error) {
-      // Re-throw for handling by caller
-      throw error;
-    }
+  private async sendEndpointAlert(endpoint: string, alertData: AlertData): Promise<void> {
+    await axios.post(endpoint, alertData);
   }
 
   /**
    * Registers a callback for canary alerts
    * @param callback Function to call when a canary is triggered
    */
-  public onCanaryTriggered(callback: (tokenName: string, context: any) => void): void {
+  public onCanaryTriggered(callback: (tokenName: string, context: AlertData) => void): void {
     this.on('canaryDetected', (alertData) => {
       callback(alertData.tokenName, alertData);
     });

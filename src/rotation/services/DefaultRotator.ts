@@ -11,7 +11,7 @@ export class DefaultRotator implements ServiceRotator {
    * @param currentToken The current token value
    * @returns Result indicating manual rotation is required
    */
-  public async rotateToken(tokenName: string, currentToken: string): Promise<RotationResult> {
+  public async rotateToken(tokenName: string, _currentToken: string): Promise<RotationResult> {
     return {
       success: false,
       message: `Automatic rotation not supported for token ${tokenName}. Please rotate manually.`,

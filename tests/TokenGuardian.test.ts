@@ -9,11 +9,6 @@ jest.mock('../src/canary/CanaryService');
 jest.mock('../src/storage/TokenStore');
 
 describe('TokenGuardian', () => {
-  // Original implementations
-  const originalTokenRotator = TokenRotator;
-  const originalCanaryService = CanaryService;
-  const originalTokenStore = TokenStore;
-  
   // Test setup
   let guardian: TokenGuardian;
   let mockTokenRotator: jest.Mocked<TokenRotator>;
@@ -91,9 +86,7 @@ describe('TokenGuardian', () => {
   
   afterAll(() => {
     // Restore original implementations
-    (TokenRotator as unknown) = originalTokenRotator;
-    (CanaryService as unknown) = originalCanaryService;
-    (TokenStore as unknown) = originalTokenStore;
+    jest.restoreAllMocks();
   });
   
   describe('initialization', () => {

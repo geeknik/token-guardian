@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { GuardianConfig } from './interfaces/GuardianConfig';
 import { TokenConfig } from './interfaces/TokenConfig';
 import { ScanResult } from './interfaces/ScanResult';
@@ -6,7 +8,7 @@ import { RotationResult } from './interfaces/RotationResult';
 import { PatternScanner } from './scanners/PatternScanner';
 import { TokenRotator } from './rotation/TokenRotator';
 import { CanaryService } from './canary/CanaryService';
-import { TokenStore } from './storage/TokenStore';
+import { TokenStore, AuditLogEntry } from './storage/TokenStore';
 import { Logger } from './utils/Logger';
 
 /**
@@ -210,8 +212,6 @@ export class TokenGuardian {
     this.logger.info('Installing git pre-commit hooks');
     
     try {
-      const fs = require('fs');
-      const path = require('path');
       
       // Find git directory
       let currentDir = process.cwd();
@@ -298,7 +298,7 @@ exit $?`;
    * @param tokenName Optional token name to filter logs
    * @returns Array of audit log entries
    */
-  public getAuditLog(tokenName?: string): any[] {
+  public getAuditLog(tokenName?: string): AuditLogEntry[] {
     return this.tokenStore.getAuditLog(tokenName);
   }
 }

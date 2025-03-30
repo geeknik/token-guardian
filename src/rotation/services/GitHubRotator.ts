@@ -52,7 +52,7 @@ export class GitHubRotator implements ServiceRotator {
       }
       
       // Step 2: Create a new token with the same scopes via GitHub API
-      const scopeString = tokenScopes.join(',');
+      const _scopeString = tokenScopes.join(',');
       const note = `TokenGuardian Rotated Token (${new Date().toISOString()})`;
       
       const createTokenResponse = await axios.post(

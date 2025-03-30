@@ -4,6 +4,19 @@ import crypto from 'crypto';
 import axios from 'axios';
 
 /**
+ * Interface representing an AWS API request
+ */
+interface AWSRequest {
+  host: string;
+  method: string;
+  path: string;
+  region: string;
+  service: string;
+  headers: Record<string, string>;
+  params?: Record<string, string>;
+}
+
+/**
  * Rotator for AWS access keys
  */
 export class AWSRotator implements ServiceRotator {
@@ -114,7 +127,7 @@ export class AWSRotator implements ServiceRotator {
    */
   private async getCurrentUser(accessKeyId: string, secretAccessKey: string): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const date = timestamp.slice(0, 8);
+    const _date = timestamp.slice(0, 8);
     
     const request = {
       host: new URL(this.stsEndpoint).host,
@@ -159,7 +172,7 @@ export class AWSRotator implements ServiceRotator {
    */
   private async listAccessKeys(accessKeyId: string, secretAccessKey: string, username: string): Promise<string[]> {
     const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const date = timestamp.slice(0, 8);
+    const _date = timestamp.slice(0, 8);
     
     const request = {
       host: new URL(this.iamEndpoint).host,
@@ -208,7 +221,7 @@ export class AWSRotator implements ServiceRotator {
    */
   private async createAccessKey(accessKeyId: string, secretAccessKey: string, username: string): Promise<{accessKeyId: string, secretAccessKey: string}> {
     const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const date = timestamp.slice(0, 8);
+    const _date = timestamp.slice(0, 8);
     
     const request = {
       host: new URL(this.iamEndpoint).host,
@@ -259,7 +272,7 @@ export class AWSRotator implements ServiceRotator {
    */
   private async deleteAccessKey(accessKeyId: string, secretAccessKey: string, username: string, keyToDelete: string): Promise<void> {
     const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const date = timestamp.slice(0, 8);
+    const _date = timestamp.slice(0, 8);
     
     const request = {
       host: new URL(this.iamEndpoint).host,
@@ -294,15 +307,15 @@ export class AWSRotator implements ServiceRotator {
    * @param secretKey AWS secret access key
    * @returns Signed request with authorization headers
    */
-  private signAwsRequest(request: any, accessKey: string, secretKey: string): any {
+  private signAwsRequest(request: AWSRequest, accessKey: string, secretKey: string): AWSRequest {
     const timestamp = request.headers['X-Amz-Date'];
-    const date = timestamp.slice(0, 8);
+    const _date = timestamp.slice(0, 8);
     
     // Create canonical request
     const canonical = this.createCanonicalRequest(request);
     
     // Create string to sign
-    const credentialScope = `${date}/${request.region}/${request.service}/aws4_request`;
+    const credentialScope = `${_date}/${request.region}/${request.service}/aws4_request`;
     const stringToSign = [
       'AWS4-HMAC-SHA256',
       timestamp,
@@ -311,7 +324,7 @@ export class AWSRotator implements ServiceRotator {
     ].join('\n');
     
     // Calculate signature
-    const kDate = this.hmac('AWS4' + secretKey, date);
+    const kDate = this.hmac('AWS4' + secretKey, _date);
     const kRegion = this.hmac(kDate, request.region);
     const kService = this.hmac(kRegion, request.service);
     const kSigning = this.hmac(kService, 'aws4_request');
@@ -332,7 +345,7 @@ export class AWSRotator implements ServiceRotator {
    * @param request Request object
    * @returns Canonical request string
    */
-  private createCanonicalRequest(request: any): string {
+  private createCanonicalRequest(request: AWSRequest): string {
     // Create canonical query string
     const canonicalQueryString = Object.keys(request.params || {})
       .sort()

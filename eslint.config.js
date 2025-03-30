@@ -5,6 +5,21 @@ import tsParser from '@typescript-eslint/parser';
 export default [
   js.configs.recommended,
   {
+    files: ['**/*.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        Buffer: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        __dirname: 'readonly'
+      }
+    }
+  },
+  {
     files: ['**/*.ts'],
     languageOptions: {
       parser: tsParser,
@@ -36,7 +51,8 @@ export default [
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_'
       }],
-      'no-console': ['warn', { allow: ['warn', 'error'] }]
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-unused-vars': 'off' // Turn off base rule as it can report incorrect errors
     }
   },
   {
@@ -55,6 +71,11 @@ export default [
     }
   },
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**']
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'examples/**' // Ignore example files for now
+    ]
   }
 ]; 

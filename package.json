@@ -1,6 +1,7 @@
 {
   "name": "token-guardian",
   "version": "1.0.0",
+  "type": "module",
   "description": "A comprehensive solution for protecting and managing API tokens and secrets",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -37,6 +38,7 @@
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "eslint": "^9.23.0",
+    "eslint-plugin-react": "^7.37.4",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",

@@ -14,8 +14,8 @@ export class TokenPatterns implements TokenPattern {
 
   constructor() {
     this.name = 'default';
-    this.regex = /(?:AKIA[0-9A-Z]{16})|(?:ghp_[a-zA-Z0-9]{36})|(?:eyJ[a-zA-Z0-9-_]+\.eyJ[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+)/;
-    this.description = 'Default pattern for common tokens';
+    this.regex = /(?:AKIA[0-9A-Z]{16})|(?:ghp_[a-zA-Z0-9]{36})|(?:eyJ[a-zA-Z0-9-_]+\.eyJ[a-zA-Z0-9-_]+\.[a-zA-Z0-9-_]+)|(?:https?:)?\/\/(?:www\.)?(?:facebook|fb|twitter|instagram|linkedin)\.com\/(?:(?:\w)*#!\/)?(?:pages\/)?(?:[\w\-]*\/)*((?:[\w\-\.]+)(?:\/)?)|(?:AAEAAAD[/\\]*[*]*|TypeObject|\$type|AECD0000|rO0|H4sIA|application\/x-java-serialized-object|a:[0-9]+:|O:[0-9]+:|s:[0-9]+:)|(?:<meta[^>]+property="og:(title|type|image|url|description|site_name)"[^>]+content="([^"]+)")/;
+    this.description = 'Default pattern for common tokens, social media profiles, serialized data, and metadata';
     this.entropyThreshold = 3.5;
     this.severity = 'high';
 
@@ -82,6 +82,29 @@ export class TokenPatterns implements TokenPattern {
       'mongodb_conn_string': '(mongodb(\\+srv)?://[^\\s<>]+)',
       'postgresql_conn_string': '(postgres(ql)?://[^\\s<>]+)',
       'mysql_conn_string': '(mysql://[^\\s<>]+)',
+      
+      // Domain Patterns
+      'email_domain': '(@[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*\\.[a-zA-Z]{2,})',
+      'cloudfront_domain': '([0-9a-z.-_]+.cloudfront.net)',
+      'aws_domain': '([0-9A-Za-z]{8}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{12})',
+      'ec2_domain': '(ec2-[0-9a-z.-_]+.compute(-1)?.amazonaws.com)',
+      'internal_domain': '([0-9a-z.-_]+.compute(-1)?.internal)',
+      'elb_domain': '([0-9a-z.-_]+.elb.amazonaws.com)',
+      'cache_domain': '([0-9a-z.-_]+.cache.amazonaws.com)',
+      'rds_domain': '([0-9a-z.-_]+.rds.amazonaws.com)',
+      's3_domain': '([a-zA-Z0-9.-_]+.s3.[a-zA-Z0-9.-_]+.amazonaws.com)',
+
+      // Username Patterns
+      'username': '(?i)(?:username|user|login|name)[^a-zA-Z0-9]*([\\w.+-]+)',
+
+      // Social Media Profiles
+      'social_media_profile': '(?:https?:)?//(?:www\\.)?(?:facebook|fb|twitter|instagram|linkedin)\\.com/(?:(?:\\w)*#!/)?(?:pages/)?(?:[\\w\\-]*/)*((?:[\\w\\-\\.]+)(?:/)?)',
+
+      // Serialized Data
+      'serialized_data': '(AAEAAAD[/\\\\]*[*]*|TypeObject|\\$type|AECD0000|rO0|H4sIA|application/x-java-serialized-object|a:[0-9]+:|O:[0-9]+:|s:[0-9]+:)',
+
+      // Open Graph
+      'open_graph_meta': '(<meta[^>]+property=\\"og:(title|type|image|url|description|site_name)\\"[^>]+content=\\"([^\\"]+)\\")',
       
       // Other
       'password_in_url': '(https?://[^:@\\s]+:[^:@\\s]*@[^:\\s]+)',

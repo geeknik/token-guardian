@@ -244,7 +244,7 @@ export class GitHubRotator implements ServiceRotator {
           
           this.logger.info(`Retrying request (${retryCount}/${this.retryOptions.maxRetries})`, {
             delay,
-            url: config.url,
+            /* url: config.url, -- removed to avoid logging sensitive endpoint */,
             status: axiosError.response?.status,
             method: config.method
           });

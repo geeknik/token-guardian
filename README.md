@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/token-guardian)](https://www.npmjs.com/package/token-guardian)
 [![CI](https://img.shields.io/github/actions/workflow/status/geeknik/token-guardian/ci.yml?branch=main&label=tests)](https://github.com/geeknik/token-guardian/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/geeknik/token-guardian/ci.yml?branch=main&label=codeql&logo=github)](https://github.com/geeknik/token-guardian/security/code-scanning)
-[![license](https://img.shields.io/npm/l/token-guardian)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## The Problem
 

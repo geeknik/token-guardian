@@ -66,12 +66,12 @@ jobs:
       run: npm audit --audit-level=high
       
     - name: Setup CodeQL
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v3
       with:
         languages: javascript
         
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@v3
       
   npm-test-publish:
     runs-on: ubuntu-latest

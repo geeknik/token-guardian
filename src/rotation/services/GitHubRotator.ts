@@ -60,6 +60,13 @@ export class GitHubRotator implements ServiceRotator {
   private readonly logger: Logger;
   private readonly oauth2Config?: GitHubOAuth2Config;
   private readonly retryOptions: RetryOptions;
+  private static readonly OAUTH_HEADERS = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json'
+  };
+  private static readonly authHeader = (token: string) => ({
+    Authorization: `token ${token}`
+  });
   
   /**
    * Creates a new GitHubRotator instance
@@ -261,12 +268,10 @@ export class GitHubRotator implements ServiceRotator {
    */
   private async getUserInfo(token: string): Promise<{ username: string; tokenScopes: string[] }> {
     try {
-      const response = await this.makeRequestWithRetry({
+      const response = await this.makeRequestWithRetry<{ login: string }>({
         url: '/user',
         method: 'GET',
-        headers: {
-          Authorization: `token ${token}`
-        }
+        headers: GitHubRotator.authHeader(token)
       });
       
       const scopeHeader = response.headers['x-oauth-scopes'] as string;
@@ -296,13 +301,18 @@ export class GitHubRotator implements ServiceRotator {
     try {
       const tokenEndpoint = this.oauth2Config.tokenEndpoint || `${this.authBaseUrl}/login/oauth/access_token`;
       
-      const response = await this.makeRequestWithRetry({
+      type OAuthTokenResponse = {
+        access_token: string;
+        refresh_token?: string;
+        expires_in?: number;
+        token_type?: string;
+        scope?: string;
+      };
+
+      const response = await this.makeRequestWithRetry<OAuthTokenResponse>({
         url: tokenEndpoint,
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
+        headers: GitHubRotator.OAUTH_HEADERS,
         data: {
           client_id: this.oauth2Config.clientId,
           client_secret: this.oauth2Config.clientSecret,
@@ -358,13 +368,18 @@ export class GitHubRotator implements ServiceRotator {
     try {
       const tokenEndpoint = this.oauth2Config.tokenEndpoint || `${this.authBaseUrl}/login/oauth/access_token`;
       
-      const response = await this.makeRequestWithRetry({
+      type OAuthTokenResponse = {
+        access_token: string;
+        refresh_token?: string;
+        expires_in?: number;
+        token_type?: string;
+        scope?: string;
+      };
+
+      const response = await this.makeRequestWithRetry<OAuthTokenResponse>({
         url: tokenEndpoint,
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
+        headers: GitHubRotator.OAUTH_HEADERS,
         data: {
           client_id: this.oauth2Config.clientId,
           client_secret: this.oauth2Config.clientSecret,
@@ -558,12 +573,10 @@ export class GitHubRotator implements ServiceRotator {
     scopes: string[]
   ): Promise<{ tokenId: string; token: string }> {
     try {
-      const response = await this.makeRequestWithRetry({
+      const response = await this.makeRequestWithRetry<{ id: string; token: string }>({
         url: '/authorizations',
         method: 'POST',
-        headers: {
-          Authorization: `token ${token}`
-        },
+        headers: GitHubRotator.authHeader(token),
         data: {
           scopes,
           note,
@@ -769,17 +782,14 @@ export class GitHubRotator implements ServiceRotator {
         if (tokenScopes.includes('delete_repo') || tokenScopes.includes('admin:org')) {
           // We don't have the ID of the old token, so we need to list all tokens
           // and find the ones that aren't our new token
-          const response = await this.makeRequestWithRetry({
+          const response = await this.makeRequestWithRetry<Array<{ note?: string; token_last_eight?: string; id: string }>>({
             url: '/authorizations',
             method: 'GET',
-            headers: {
-              Authorization: `token ${currentToken}`
-            }
+            headers: GitHubRotator.authHeader(currentToken)
           });
           
           // Find tokens that match our naming pattern but aren't the new one
-          const tokens = response.data as Array<{ note?: string; token_last_eight?: string; id: string }>;
-          const oldTokens = tokens.filter(token => 
+          const oldTokens = response.data.filter(token => 
             token.note && token.note.includes('TokenGuardian') && token.token_last_eight !== newToken.slice(-8)
           );
           

@@ -220,7 +220,7 @@ describe('TokenGuardian', () => {
     tokenGuardian.protect('API_KEY', 'ghp_testtokenwithsufficientlength', { rotationInterval: 'not-an-interval' });
 
     const internals = tokenGuardian as unknown as { parseIntervalToMs: (interval: string) => number };
-    const expectedMs = internals.parseIntervalToMs(testConfig.rotationInterval);
+    const expectedMs = internals.parseIntervalToMs(testConfig.rotationInterval || '7d');
     expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), expectedMs);
 
     setTimeoutSpy.mockRestore();

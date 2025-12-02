@@ -1,31 +1,30 @@
 import { TokenFingerprinter, TokenUsageEvent } from '../src/fingerprinting/TokenFingerprinter';
 import { TokenGuardian } from '../src/TokenGuardian';
-
-type MockLogger = {
-  info: jest.Mock;
-  warn: jest.Mock;
-  error: jest.Mock;
-  debug: jest.Mock;
-};
+import { Logger } from '../src/utils/Logger';
 
 describe('TokenFingerprinter', () => {
   let fingerprinter: TokenFingerprinter;
-  let mockLogger: MockLogger;
+  let logger: Logger;
+  let warnSpy: jest.SpyInstance;
+  let infoSpy: jest.SpyInstance;
   let mockDate: Date;
+  let dateSpy: jest.SpyInstance;
   let tokenGuardian: TokenGuardian | null;
 
   beforeEach(() => {
-    mockLogger = {
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-      debug: jest.fn()
-    };
-    fingerprinter = new TokenFingerprinter(mockLogger, 5);
+    logger = new Logger('info');
+    infoSpy = jest.fn();
+    warnSpy = jest.fn();
+    (logger as unknown as { info: jest.Mock }).info = infoSpy as jest.Mock;
+    (logger as unknown as { warn: jest.Mock }).warn = warnSpy as jest.Mock;
+    (logger as unknown as { error: jest.Mock }).error = jest.fn();
+    (logger as unknown as { debug: jest.Mock }).debug = jest.fn();
 
-    // Mock Date.now() to return a fixed timestamp
+    fingerprinter = new TokenFingerprinter(logger, 5);
+
+    // Mock Date.now() to return a fixed timestamp for most tests
     mockDate = new Date('2024-03-30T12:00:00Z');
-    jest.spyOn(global, 'Date').mockImplementation(() => mockDate);
+    dateSpy = jest.spyOn(global as any, 'Date').mockImplementation(() => mockDate as any);
 
     tokenGuardian = new TokenGuardian();
   });
@@ -35,6 +34,7 @@ describe('TokenFingerprinter', () => {
     jest.clearAllMocks();
     jest.clearAllTimers();
     jest.useRealTimers();
+    dateSpy?.mockRestore();
     // Clean up any active timers
     tokenGuardian?.stopRotation('API_KEY');
   });
@@ -43,7 +43,7 @@ describe('TokenFingerprinter', () => {
     it('should initialize tracking for a new token', () => {
       const hash = fingerprinter.initializeTracking('test-token', 'Test Token');
       expect(hash).toHaveLength(16);
-      expect(mockLogger.info).toHaveBeenCalledWith(
+      expect(infoSpy).toHaveBeenCalledWith(
         'Started tracking token: Test Token',
         expect.objectContaining({ fingerprint: hash })
       );
@@ -107,7 +107,7 @@ describe('TokenFingerprinter', () => {
 
     it('should handle unknown fingerprint', () => {
       fingerprinter.recordUsage('unknown-hash', testEvent);
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(warnSpy).toHaveBeenCalledWith(
         'Attempted to record usage for unknown token: unknown-hash'
       );
     });
@@ -128,8 +128,8 @@ describe('TokenFingerprinter', () => {
     let normalEvent: TokenUsageEvent;
 
     beforeEach(() => {
-      // Restore real Date implementation
-      jest.restoreAllMocks();
+      // Use real Date for anomaly tests
+      dateSpy.mockRestore();
 
       // Initialize fingerprinter with normal hours
       const normalHoursDate = new Date('2024-03-30T12:00:00Z');
@@ -151,14 +151,18 @@ describe('TokenFingerprinter', () => {
         });
       }
 
-      // Clear mock calls from setup
-      jest.clearAllMocks();
+      // Refresh spies after setup to avoid bleed from baseline events
+      warnSpy = jest.fn();
+      infoSpy = jest.fn();
+      (logger as unknown as { warn: jest.Mock }).warn = warnSpy as jest.Mock;
+      (logger as unknown as { info: jest.Mock }).info = infoSpy as jest.Mock;
+      (fingerprinter as unknown as { logger: Logger }).logger = logger;
     });
 
     it('should detect new source', () => {
       fingerprinter.recordUsage(tokenHash, { ...normalEvent, source: 'new-source' });
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(warnSpy).toHaveBeenCalledWith(
         'New usage source detected for token: Test Token',
         expect.objectContaining({
           fingerprint: tokenHash,
@@ -170,7 +174,7 @@ describe('TokenFingerprinter', () => {
     it('should detect new operation', () => {
       fingerprinter.recordUsage(tokenHash, { ...normalEvent, operation: 'new-op' });
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(warnSpy).toHaveBeenCalledWith(
         'New operation type detected for token: Test Token',
         expect.objectContaining({
           fingerprint: tokenHash,
@@ -196,7 +200,7 @@ describe('TokenFingerprinter', () => {
       ));
 
       // Clear mock calls from initialization
-      mockLogger.warn.mockClear();
+      warnSpy.mockClear();
 
       // Record failures to trigger warning
       await Promise.all(Array(8).fill(0).map(() => 
@@ -210,7 +214,7 @@ describe('TokenFingerprinter', () => {
       ));
 
       // Assert
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(warnSpy).toHaveBeenCalledWith(
         'Unusual failure rate detected for token: Test Token',
         expect.objectContaining({
           fingerprint: tokenHash,
@@ -234,7 +238,7 @@ describe('TokenFingerprinter', () => {
       });
 
       // Clear mock calls after setup
-      mockLogger.warn.mockClear();
+      warnSpy.mockClear();
 
       // Record off-hours usage
       const offHoursEvent: TokenUsageEvent = {
@@ -247,7 +251,7 @@ describe('TokenFingerprinter', () => {
       fingerprinter.recordUsage(tokenHash, offHoursEvent);
 
       // Assert
-      expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect(warnSpy).toHaveBeenCalledWith(
         'Off-hours token usage detected: Test Token',
         expect.objectContaining({
           fingerprint: tokenHash,

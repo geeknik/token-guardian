@@ -36,11 +36,12 @@ describe('TokenValidator', () => {
     const jwt = buildJwt({ sub: '123', exp: future });
 
     const result = validator.validate(jwt);
+    const format = result.metadata.format as { header?: { alg?: string }; payload?: { sub?: string } } | undefined;
 
     expect(result.isValid).toBe(true);
     expect(result.metadata.type).toBe('JWT');
-    expect(result.metadata.format?.header.alg).toBe('HS256');
-    expect(result.metadata.format?.payload.sub).toBe('123');
+    expect(format?.header?.alg).toBe('HS256');
+    expect(format?.payload?.sub).toBe('123');
   });
 
   it('captures missing required character types', () => {

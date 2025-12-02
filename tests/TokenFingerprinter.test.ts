@@ -8,7 +8,6 @@ describe('TokenFingerprinter', () => {
   let warnSpy: jest.SpyInstance;
   let infoSpy: jest.SpyInstance;
   let mockDate: Date;
-  let dateSpy: jest.SpyInstance;
   let tokenGuardian: TokenGuardian | null;
 
   beforeEach(() => {
@@ -22,9 +21,9 @@ describe('TokenFingerprinter', () => {
 
     fingerprinter = new TokenFingerprinter(logger, 5);
 
-    // Mock Date.now() to return a fixed timestamp for most tests
+    // Mock time for deterministic tests
     mockDate = new Date('2024-03-30T12:00:00Z');
-    dateSpy = jest.spyOn(global as unknown as { Date: unknown }, 'Date').mockImplementation(() => mockDate as unknown as DateConstructor);
+    jest.useFakeTimers().setSystemTime(mockDate);
 
     tokenGuardian = new TokenGuardian();
   });
@@ -34,7 +33,6 @@ describe('TokenFingerprinter', () => {
     jest.clearAllMocks();
     jest.clearAllTimers();
     jest.useRealTimers();
-    dateSpy?.mockRestore();
     // Clean up any active timers
     tokenGuardian?.stopRotation('API_KEY');
   });
@@ -128,8 +126,8 @@ describe('TokenFingerprinter', () => {
     let normalEvent: TokenUsageEvent;
 
     beforeEach(() => {
-      // Use real Date for anomaly tests
-      dateSpy.mockRestore();
+      // Use real timers for anomaly tests
+      jest.useRealTimers();
 
       // Initialize fingerprinter with normal hours
       const normalHoursDate = new Date('2024-03-30T12:00:00Z');

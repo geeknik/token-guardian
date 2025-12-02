@@ -73,6 +73,11 @@ describe('TokenGuardian', () => {
     tokenGuardian = new TokenGuardian(testConfig);
   });
 
+  afterEach(() => {
+    tokenGuardian.stopAllRotations();
+    jest.useRealTimers();
+  });
+
   test('should initialize with config', () => {
     expect(tokenGuardian).toBeDefined();
     expect(CanaryService).toHaveBeenCalledWith(testConfig.canaryEnabled);
@@ -177,6 +182,45 @@ describe('TokenGuardian', () => {
     expect(result).toBe(true);
     // Rotation cancellation is now handled internally by TokenGuardian
     expect(mockTokenStore.removeToken).toHaveBeenCalledWith(tokenName);
+  });
+
+  test('stops rotation schedules explicitly', () => {
+    jest.useFakeTimers();
+
+    mockPatternScanner.scan.mockReturnValue([]);
+    
+    tokenGuardian.protect('API_KEY', 'ghp_testtokenwithsufficientlength');
+    expect((tokenGuardian as any).rotationSchedules.size).toBe(1);
+
+    const cancelled = tokenGuardian.stopRotation('API_KEY');
+    expect(cancelled).toBe(true);
+    expect((tokenGuardian as any).rotationSchedules.size).toBe(0);
+
+    const noScheduleCancelled = tokenGuardian.stopRotation('UNKNOWN');
+    expect(noScheduleCancelled).toBe(false);
+  });
+
+  test('parses and normalizes rotation intervals safely', () => {
+    const defaultInterval = (tokenGuardian as any).defaultRotationInterval;
+    const defaultMs = (tokenGuardian as any).parseIntervalToMs(defaultInterval);
+
+    expect((tokenGuardian as any).parseIntervalToMs('15m')).toBe(15 * 60 * 1000);
+    expect((tokenGuardian as any).parseIntervalToMs('2h')).toBe(2 * 60 * 60 * 1000);
+    expect((tokenGuardian as any).parseIntervalToMs('0d')).toBe(defaultMs);
+    expect((tokenGuardian as any).parseIntervalToMs('invalid')).toBe(defaultMs);
+  });
+
+  test('falls back to default rotation interval when an invalid token interval is provided', () => {
+    jest.useFakeTimers();
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+
+    mockPatternScanner.scan.mockReturnValue([]);
+    tokenGuardian.protect('API_KEY', 'ghp_testtokenwithsufficientlength', { rotationInterval: 'not-an-interval' });
+
+    const expectedMs = (tokenGuardian as any).parseIntervalToMs(testConfig.rotationInterval);
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), expectedMs);
+
+    setTimeoutSpy.mockRestore();
   });
 
   test('scans file content for tokens', async () => {

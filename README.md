@@ -61,6 +61,12 @@ const token = guardian.getToken('GITHUB_TOKEN');
 
 // Manually rotate a token
 await guardian.rotateToken('AWS_CREDENTIALS');
+
+// Pause scheduled rotation if you need to take a token out of circulation temporarily
+guardian.stopRotation('GITHUB_TOKEN');
+
+// Stop all scheduled rotations (useful during shutdown or maintenance)
+guardian.stopAllRotations();
 ```
 
 ## Features
@@ -83,6 +89,9 @@ TokenGuardian provides actual working rotation for supported services:
 - **AWS IAM Keys**: Securely rotates IAM access keys with proper verification
 - **GitHub Tokens**: Full API-based rotation with scope preservation
 - **Custom Services**: Extensible framework for adding more services
+- **Rotation Controls**: Explicitly pause rotation per token or stop all schedules during shutdown
+
+Rotation intervals are validated (positive integers followed by `d`, `h`, `m`, or `s`). Invalid inputs automatically fall back to the configured default (30d by default).
 
 ### 🕵️ Canary Tokens
 

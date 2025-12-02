@@ -15,6 +15,7 @@ import { TokenPatterns } from './scanners/TokenPatterns';
  * TokenGuardian - Main class that provides token protection functionality
  */
 export class TokenGuardian {
+  private readonly defaultRotationInterval = '30d';
   private config: GuardianConfig & { logLevel: LogLevel };
   private scanner: PatternScanner;
   private rotator: TokenRotator;
@@ -34,15 +35,17 @@ export class TokenGuardian {
       throw new Error('Invalid log level. Must be one of: debug, info, warn, error');
     }
 
+    this.logger = new Logger(logLevel);
+    const rotationInterval = this.normalizeInterval(config.rotationInterval, this.defaultRotationInterval);
+
     this.config = {
       services: config.services || ['default'],
-      rotationInterval: config.rotationInterval || '30d',
+      rotationInterval,
       canaryEnabled: config.canaryEnabled !== undefined ? config.canaryEnabled : true,
       encryptionKey: config.encryptionKey || this.generateEncryptionKey(),
       logLevel
     };
 
-    this.logger = new Logger(this.config.logLevel);
     this.patterns = [new TokenPatterns()];
     this.scanner = new PatternScanner(this.patterns);
     this.tokenStore = new TokenStore(this.config.encryptionKey);
@@ -67,21 +70,55 @@ export class TokenGuardian {
    * @returns Milliseconds
    */
   private parseIntervalToMs(interval: string): number {
-    const unit = interval.slice(-1);
-    const value = parseInt(interval.slice(0, -1), 10);
-    
-    switch (unit) {
-      case 'd':
-        return value * 24 * 60 * 60 * 1000;
-      case 'h':
-        return value * 60 * 60 * 1000;
-      case 'm':
-        return value * 60 * 1000;
-      case 's':
-        return value * 1000;
-      default:
-        return 30 * 24 * 60 * 60 * 1000; // Default to 30 days
+    const match = interval.trim().match(/^(\d+)([dhms])$/i);
+    if (!match || Number(match[1]) <= 0) {
+      const fallbackMs = this.parseIntervalToMs(this.defaultRotationInterval);
+      this.logger.warn(`Invalid rotation interval "${interval}" provided. Falling back to default ${this.defaultRotationInterval}`);
+      return fallbackMs;
     }
+
+    const value = Number(match[1]);
+    const unit = match[2].toLowerCase();
+    const multipliers: Record<string, number> = {
+      d: 24 * 60 * 60 * 1000,
+      h: 60 * 60 * 1000,
+      m: 60 * 1000,
+      s: 1000
+    };
+
+    return value * multipliers[unit];
+  }
+
+  /**
+   * Normalizes interval strings to a validated format, falling back when invalid
+   * @param interval Interval string to normalize
+   * @param fallback Fallback interval if the provided one is invalid
+   * @returns Normalized interval string
+   */
+  private normalizeInterval(interval?: string, fallback?: string): string {
+    const normalizedFallback = fallback && /^(\d+)([dhms])$/i.test(fallback)
+      ? fallback
+      : this.defaultRotationInterval;
+
+    if (!interval) {
+      return normalizedFallback;
+    }
+
+    const trimmed = interval.trim();
+    const match = trimmed.match(/^(\d+)([dhms])$/i);
+
+    if (!match) {
+      this.logger.warn(`Invalid rotation interval "${interval}" provided. Using fallback ${normalizedFallback}`);
+      return normalizedFallback;
+    }
+
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value <= 0) {
+      this.logger.warn(`Rotation interval must be greater than 0. Using fallback ${normalizedFallback}`);
+      return normalizedFallback;
+    }
+
+    return `${value}${match[2].toLowerCase()}`;
   }
 
   /**
@@ -112,11 +149,7 @@ export class TokenGuardian {
    * @param tokenName The name/identifier of the token
    */
   private cancelRotation(tokenName: string): void {
-    const timer = this.rotationSchedules.get(tokenName);
-    if (timer) {
-      clearTimeout(timer);
-      this.rotationSchedules.delete(tokenName);
-    }
+    this.stopRotation(tokenName);
   }
 
   /**
@@ -141,7 +174,7 @@ export class TokenGuardian {
     
     const config: TokenConfig = {
       rotationEnabled: tokenConfig.rotationEnabled !== undefined ? tokenConfig.rotationEnabled : true,
-      rotationInterval: tokenConfig.rotationInterval || this.config.rotationInterval,
+      rotationInterval: this.normalizeInterval(tokenConfig.rotationInterval, this.config.rotationInterval),
       canaryEnabled: tokenConfig.canaryEnabled !== undefined ? tokenConfig.canaryEnabled : this.config.canaryEnabled,
       serviceType: tokenConfig.serviceType || 'default',
     };
@@ -269,6 +302,33 @@ export class TokenGuardian {
     
     this.logger.info(`Token ${tokenName} removed successfully`);
     return true;
+  }
+
+  /**
+   * Stops scheduled rotation for a specific token
+   * @param tokenName The name/identifier of the token
+   * @returns True if a rotation schedule was cancelled
+   */
+  public stopRotation(tokenName: string): boolean {
+    const timer = this.rotationSchedules.get(tokenName);
+    if (!timer) {
+      this.logger.debug(`No rotation schedule found for token ${tokenName}`);
+      return false;
+    }
+
+    clearTimeout(timer);
+    this.rotationSchedules.delete(tokenName);
+    this.logger.info(`Rotation schedule cancelled for token ${tokenName}`);
+    return true;
+  }
+
+  /**
+   * Stops all scheduled rotations
+   */
+  public stopAllRotations(): void {
+    for (const tokenName of this.rotationSchedules.keys()) {
+      this.stopRotation(tokenName);
+    }
   }
 
   /**

@@ -24,7 +24,7 @@ describe('TokenFingerprinter', () => {
 
     // Mock Date.now() to return a fixed timestamp for most tests
     mockDate = new Date('2024-03-30T12:00:00Z');
-    dateSpy = jest.spyOn(global as any, 'Date').mockImplementation(() => mockDate as any);
+    dateSpy = jest.spyOn(global as unknown as { Date: unknown }, 'Date').mockImplementation(() => mockDate as unknown as DateConstructor);
 
     tokenGuardian = new TokenGuardian();
   });

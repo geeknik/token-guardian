@@ -1,3 +1,8 @@
+// Polyfill structuredClone for runtimes that lack it (e.g., older Node in CI)
+if (typeof globalThis.structuredClone !== 'function') {
+  globalThis.structuredClone = value => JSON.parse(JSON.stringify(value));
+}
+
 import js from '@eslint/js';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';

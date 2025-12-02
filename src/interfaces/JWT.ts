@@ -4,7 +4,7 @@
 export interface JWTValidationResult {
   valid: boolean;
   error?: string;
-  payload?: Record<string, any>;
-  header?: Record<string, any>;
+  payload?: Record<string, unknown>;
+  header?: Record<string, unknown>;
   expiresAt?: Date;
-} 
+}

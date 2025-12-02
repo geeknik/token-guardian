@@ -3,7 +3,7 @@ import { TokenValidator } from '../src/validation/TokenValidator';
 describe('TokenValidator', () => {
   const validator = new TokenValidator();
 
-  const buildJwt = (claims: Record<string, any>) => {
+  const buildJwt = (claims: Record<string, unknown>) => {
     const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64');
     const payload = Buffer.from(JSON.stringify(claims)).toString('base64');
     return `${header}.${payload}.signature`;

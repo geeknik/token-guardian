@@ -30,5 +30,5 @@ export interface RotationResult {
   /**
    * Additional metadata about the rotation
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }

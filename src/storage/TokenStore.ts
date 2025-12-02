@@ -69,7 +69,7 @@ export class TokenStore {
       this.logAction(tokenName, 'store', { configType: config.serviceType });
       
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -101,7 +101,7 @@ export class TokenStore {
       this.logAction(tokenName, 'update', { hasNewExpiry: !!newExpiry });
       
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

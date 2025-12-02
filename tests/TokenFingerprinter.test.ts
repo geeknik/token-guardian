@@ -1,15 +1,16 @@
 import { TokenFingerprinter, TokenUsageEvent } from '../src/fingerprinting/TokenFingerprinter';
-import { Logger } from '../src/utils/Logger';
 import { TokenGuardian } from '../src/TokenGuardian';
+
+type MockLogger = {
+  info: jest.Mock;
+  warn: jest.Mock;
+  error: jest.Mock;
+  debug: jest.Mock;
+};
 
 describe('TokenFingerprinter', () => {
   let fingerprinter: TokenFingerprinter;
-  let mockLogger: {
-    info: jest.Mock;
-    warn: jest.Mock;
-    error: jest.Mock;
-    debug: jest.Mock;
-  };
+  let mockLogger: MockLogger;
   let mockDate: Date;
   let tokenGuardian: TokenGuardian | null;
 
@@ -20,7 +21,7 @@ describe('TokenFingerprinter', () => {
       error: jest.fn(),
       debug: jest.fn()
     };
-    fingerprinter = new TokenFingerprinter(mockLogger as any, 5);
+    fingerprinter = new TokenFingerprinter(mockLogger, 5);
 
     // Mock Date.now() to return a fixed timestamp
     mockDate = new Date('2024-03-30T12:00:00Z');

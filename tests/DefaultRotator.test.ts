@@ -22,7 +22,7 @@ describe('DefaultRotator', () => {
     const payload = verify(result.newToken as string, secretKey, {
       issuer: 'token-guardian',
       audience: 'default'
-    }) as any;
+    }) as { sub?: string };
     expect(payload.sub).toBe('user-123');
   });
 

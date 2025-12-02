@@ -14,7 +14,7 @@ export interface TokenUsageEvent {
   /** Success/failure status */
   success: boolean;
   /** Additional context */
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 /**

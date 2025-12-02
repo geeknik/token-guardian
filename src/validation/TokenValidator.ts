@@ -17,7 +17,7 @@ export interface ValidationResult {
     /** Token length */
     length: number;
     /** Token format details */
-    format?: Record<string, any>;
+    format?: Record<string, unknown>;
   };
 }
 
@@ -96,9 +96,9 @@ export class TokenValidator {
    * @param token Token to validate
    * @returns Validation result
    */
-  private validateJWT(token: string): { isValid: boolean; issues: string[]; format?: any } {
+  private validateJWT(token: string): { isValid: boolean; issues: string[]; format?: Record<string, unknown> } {
     const issues: string[] = [];
-    let format: any = {};
+    let format: Record<string, unknown> = {};
 
     try {
       const parts = token.split('.');

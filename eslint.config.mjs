@@ -51,7 +51,7 @@ export default [
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_'
       }],
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-console': ['warn', { allow: ['warn', 'error', 'info', 'debug', 'log'] }],
       'no-unused-vars': 'off' // Turn off base rule as it can report incorrect errors
     }
   },

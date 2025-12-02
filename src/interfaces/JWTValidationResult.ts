@@ -15,7 +15,7 @@ export interface JWTValidationResult {
   /**
    * Decoded token payload if validation succeeded
    */
-  payload?: Record<string, any>;
+  payload?: Record<string, unknown>;
 
   /**
    * Token expiration timestamp in seconds since epoch
@@ -25,5 +25,5 @@ export interface JWTValidationResult {
   /**
    * Additional metadata about the validation result
    */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 } 

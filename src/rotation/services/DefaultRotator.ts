@@ -108,11 +108,15 @@ export class DefaultRotator implements RotationStrategy {
   /**
    * Generate a new JWT token
    */
-  private async generateToken(claims: Record<string, any> = {}): Promise<string> {
+  private async generateToken(claims: Record<string, unknown> = {}): Promise<string> {
     // Strip registered claims that are controlled by signing options to avoid conflicts
     // jsonwebtoken will throw if both payload and options specify the same registered claim
-    const { exp, iat, nbf, iss, aud, ...rest } = claims;
-    const payload = { ...rest, ...this.config.additionalClaims };
+    const payload: Record<string, unknown> = { ...claims, ...this.config.additionalClaims };
+    delete payload.exp;
+    delete payload.iat;
+    delete payload.nbf;
+    delete payload.iss;
+    delete payload.aud;
 
     const options = {
       expiresIn: this.config.expiresIn,

@@ -212,7 +212,7 @@ export class GitHubRotator implements ServiceRotator {
    * @param config Axios request configuration
    * @returns Promise with axios response
    */
-  private async makeRequestWithRetry<T = any>(
+  private async makeRequestWithRetry<T = unknown>(
     config: AxiosRequestConfig
   ): Promise<AxiosResponse<T>> {
     let retryCount = 0;
@@ -778,8 +778,9 @@ export class GitHubRotator implements ServiceRotator {
           });
           
           // Find tokens that match our naming pattern but aren't the new one
-          const oldTokens = response.data.filter((t: any) => 
-            t.note && t.note.includes('TokenGuardian') && t.token_last_eight !== newToken.slice(-8)
+          const tokens = response.data as Array<{ note?: string; token_last_eight?: string; id: string }>;
+          const oldTokens = tokens.filter(token => 
+            token.note && token.note.includes('TokenGuardian') && token.token_last_eight !== newToken.slice(-8)
           );
           
           if (oldTokens.length > 0) {

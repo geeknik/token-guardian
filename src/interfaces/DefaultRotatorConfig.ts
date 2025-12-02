@@ -27,7 +27,7 @@ export interface DefaultRotatorConfig {
   /**
    * Additional claims to include in the token
    */
-  additionalClaims?: Record<string, any>;
+  additionalClaims?: Record<string, unknown>;
 
   /**
    * Validation options for verifying tokens

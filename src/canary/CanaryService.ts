@@ -694,14 +694,22 @@ export class CanaryService extends EventEmitter {
    */
   private getSourceInfo(): { ipAddress: string; userAgent: string; timestamp: string; } {
     // Get IP address from environment or request context if available
+    const context = global as unknown as {
+      requestContext?: {
+        ip?: string;
+        connection?: { remoteAddress?: string };
+        headers?: Record<string, string>;
+      };
+    };
+
     const ipAddress = process.env.CLIENT_IP || 
-                     (global as any).requestContext?.ip || 
-                     (global as any).requestContext?.connection?.remoteAddress ||
+                     context.requestContext?.ip || 
+                     context.requestContext?.connection?.remoteAddress ||
                      'unknown';
 
     // Get user agent from environment or request context if available
     const userAgent = process.env.CLIENT_USER_AGENT || 
-                     (global as any).requestContext?.headers?.['user-agent'] ||
+                     context.requestContext?.headers?.['user-agent'] ||
                      'unknown';
 
     return {

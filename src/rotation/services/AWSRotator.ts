@@ -81,7 +81,7 @@ export class AWSRotator implements ServiceRotator {
         // If verification fails, attempt to delete the new key and fail
         try {
           await this.deleteAccessKey(accessKeyId, secretAccessKey, username, newKey.accessKeyId);
-        } catch (cleanupError) {
+        } catch {
           // Ignore cleanup errors, focus on the primary issue
         }
         

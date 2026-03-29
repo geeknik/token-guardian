@@ -111,6 +111,7 @@ Embed undetectable canary markers in your tokens to be alerted when they're used
 - Multiple format-specific strategies for optimal tracking
 
 JWTs are left unchanged to preserve signature validity; TokenGuardian does not mutate signed JWT payloads for canary tracking.
+Webhook and per-token alert endpoints must use `https://` and cannot point at localhost or private-network IP literals.
 
 ### 🔐 Token Storage
 

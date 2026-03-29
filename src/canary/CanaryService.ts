@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { EventEmitter } from 'events';
 import axios from 'axios';
+import net from 'net';
 import { Logger } from '../utils/Logger';
 
 /**
@@ -54,6 +55,13 @@ interface CanaryError {
  * Service for managing canary tokens
  */
 export class CanaryService extends EventEmitter {
+  private static readonly alertRequestConfig = {
+    timeout: 5000,
+    maxRedirects: 0,
+    maxContentLength: 16 * 1024,
+    maxBodyLength: 16 * 1024,
+    validateStatus: (status: number) => status >= 200 && status < 300
+  };
   private enabled: boolean;
   private canaries: Map<string, string>;
   private webhookUrl: string | null = null;
@@ -75,7 +83,7 @@ export class CanaryService extends EventEmitter {
    * @param webhookUrl URL to send notifications to
    */
   public configureWebhook(webhookUrl: string): void {
-    this.webhookUrl = webhookUrl;
+    this.webhookUrl = this.validateAlertUrl(webhookUrl);
   }
 
   /**
@@ -84,7 +92,7 @@ export class CanaryService extends EventEmitter {
    * @param endpointUrl URL to notify on detection
    */
   public addAlertEndpoint(tokenName: string, endpointUrl: string): void {
-    this.alertEndpoints.set(tokenName, endpointUrl);
+    this.alertEndpoints.set(tokenName, this.validateAlertUrl(endpointUrl));
   }
 
   /**
@@ -600,7 +608,7 @@ export class CanaryService extends EventEmitter {
           }
         }
       ]
-    });
+    }, CanaryService.alertRequestConfig);
   }
 
   /**
@@ -609,7 +617,76 @@ export class CanaryService extends EventEmitter {
    * @param alertData Data to send in the alert
    */
   private async sendEndpointAlert(endpoint: string, alertData: AlertData): Promise<void> {
-    await axios.post(endpoint, alertData);
+    await axios.post(endpoint, alertData, CanaryService.alertRequestConfig);
+  }
+
+  /**
+   * Validate outbound alert destinations before storing or using them.
+   */
+  private validateAlertUrl(rawUrl: string): string {
+    let parsedUrl: URL;
+
+    try {
+      parsedUrl = new URL(rawUrl);
+    } catch {
+      throw new Error('Alert destination must be a valid absolute URL');
+    }
+
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error('Alert destinations must use HTTPS');
+    }
+
+    if (parsedUrl.username || parsedUrl.password) {
+      throw new Error('Alert destinations must not include embedded credentials');
+    }
+
+    if (this.isDisallowedAlertHost(parsedUrl.hostname)) {
+      throw new Error('Alert destinations must not target localhost or private network addresses');
+    }
+
+    return parsedUrl.toString();
+  }
+
+  /**
+   * Reject obvious local and private-network destinations to reduce SSRF risk.
+   */
+  private isDisallowedAlertHost(hostname: string): boolean {
+    const normalizedHost = hostname.trim().toLowerCase();
+    if (normalizedHost === 'localhost') {
+      return true;
+    }
+
+    const ipVersion = net.isIP(normalizedHost);
+    if (ipVersion === 4) {
+      return this.isPrivateIpv4(normalizedHost);
+    }
+
+    if (ipVersion === 6) {
+      return normalizedHost === '::1' ||
+        normalizedHost.startsWith('fc') ||
+        normalizedHost.startsWith('fd') ||
+        normalizedHost.startsWith('fe80:');
+    }
+
+    return false;
+  }
+
+  /**
+   * Detect private, loopback, link-local, and unspecified IPv4 ranges.
+   */
+  private isPrivateIpv4(ipAddress: string): boolean {
+    const octets = ipAddress.split('.').map(value => Number.parseInt(value, 10));
+    if (octets.length !== 4 || octets.some(value => !Number.isInteger(value) || value < 0 || value > 255)) {
+      return true;
+    }
+
+    const [first, second] = octets;
+    return first === 0 ||
+      first === 10 ||
+      first === 127 ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168);
   }
 
   /**

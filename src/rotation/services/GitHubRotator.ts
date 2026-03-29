@@ -54,6 +54,8 @@ export interface RetryOptions {
  * Rotator for GitHub tokens with OAuth2 support
  */
 export class GitHubRotator implements ServiceRotator {
+  private static readonly unsupportedPatRotationMessage =
+    'GitHub personal access token rotation is unsupported because GitHub does not expose PAT create/delete APIs. Use OAuth token refresh or GitHub App credentials instead.';
   private readonly apiBaseUrl: string = 'https://api.github.com';
   private readonly authBaseUrl: string = 'https://github.com';
   private readonly axiosInstance: AxiosInstance;
@@ -568,39 +570,11 @@ export class GitHubRotator implements ServiceRotator {
    * @returns New token information
    */
   public async createPersonalAccessToken(
-    token: string,
-    note: string,
-    scopes: string[]
+    _token: string,
+    _note: string,
+    _scopes: string[]
   ): Promise<{ tokenId: string; token: string }> {
-    try {
-      const response = await this.makeRequestWithRetry<{ id: string; token: string }>({
-        url: '/authorizations',
-        method: 'POST',
-        headers: GitHubRotator.authHeader(token),
-        data: {
-          scopes,
-          note,
-          fingerprint: `token-guardian-${Date.now()}`
-        }
-      });
-      
-      this.logger.info('Successfully created new personal access token', {
-        note,
-        scopes
-      });
-      
-      return {
-        tokenId: response.data.id,
-        token: response.data.token
-      };
-    } catch (error) {
-      this.logger.error('Failed to create personal access token', { 
-        error: this.formatError(error),
-        note,
-        scopes 
-      });
-      throw new Error(`Failed to create personal access token: ${this.formatError(error)}`);
-    }
+    throw new Error(GitHubRotator.unsupportedPatRotationMessage);
   }
 
   /**
@@ -609,42 +583,9 @@ export class GitHubRotator implements ServiceRotator {
    * @param tokenId ID of the token to delete
    * @returns True if deletion was successful
    */
-  public async deletePersonalAccessToken(token: string, tokenId: string): Promise<boolean> {
-    try {
-      // First validate that the token still exists
-      try {
-        await this.makeRequestWithRetry({
-          url: `/authorizations/${tokenId}`,
-          method: 'GET',
-          headers: {
-            Authorization: `token ${token}`
-          }
-        });
-      } catch (checkError) {
-        if (axios.isAxiosError(checkError) && checkError.response?.status === 404) {
-          this.logger.info('Token already deleted or does not exist', { tokenId });
-          return true; // Consider it a success if token is already gone
-        }
-        // For other errors during check, continue with deletion attempt
-      }
-      
-      await this.makeRequestWithRetry({
-        url: `/authorizations/${tokenId}`,
-        method: 'DELETE',
-        headers: {
-          Authorization: `token ${token}`
-        }
-      });
-      
-      this.logger.info('Successfully deleted personal access token', { tokenId });
-      return true;
-    } catch (error) {
-      this.logger.error('Failed to delete personal access token', { 
-        error: this.formatError(error),
-        tokenId 
-      });
-      return false;
-    }
+  public async deletePersonalAccessToken(_token: string, _tokenId: string): Promise<boolean> {
+    this.logger.warn(GitHubRotator.unsupportedPatRotationMessage);
+    return false;
   }
 
   /**
@@ -653,7 +594,21 @@ export class GitHubRotator implements ServiceRotator {
    * @param currentToken The current token value
    * @returns Result of the rotation
    */
-  public async rotateToken(tokenName: string, currentToken: string): Promise<RotationResult> {
+  public async rotateToken(tokenName: string, _currentToken: string): Promise<RotationResult> {
+    const unsupportedMessage = GitHubRotator.unsupportedPatRotationMessage;
+    this.logger.warn('GitHub token rotation refused', {
+      tokenName,
+      reason: unsupportedMessage
+    });
+
+    return {
+      success: false,
+      message: unsupportedMessage,
+      newExpiry: null,
+      warnings: ['Configure OAuth refresh token handling or use GitHub App credentials instead of PAT rotation']
+    };
+
+    /* PAT rotation intentionally disabled.
     try {
       // Step 1: Validate the current token and gather its scope information
       let tokenScopes: string[] = [];
@@ -875,5 +830,6 @@ export class GitHubRotator implements ServiceRotator {
         newExpiry: null
       };
     }
+    */
   }
 }

@@ -48,9 +48,10 @@ const guardian = new TokenGuardian({
 // Check if a string contains potential tokens or secrets
 const hasSensitiveData = guardian.scanString('My API key is sk_test_1234567890abcdef');
 
-// Protect your GitHub token and enable rotation
+// Protect your GitHub token. PAT rotation is intentionally disabled because
+// GitHub does not expose supported APIs for PAT create/delete operations.
 guardian.protect('GITHUB_TOKEN', process.env.GITHUB_TOKEN, {
-  rotationEnabled: true,
+  rotationEnabled: false,
   canaryEnabled: true,
   serviceType: 'github'
 });
@@ -94,7 +95,7 @@ TokenGuardian can detect over 150 different token formats, including:
 TokenGuardian provides actual working rotation for supported services:
 
 - **AWS IAM Keys**: Securely rotates IAM access keys with proper verification
-- **GitHub Tokens**: Full API-based rotation with scope preservation
+- **GitHub Tokens**: PAT rotation is disabled by design; use OAuth refresh tokens or GitHub App credentials instead
 - **Default JWT Rotation**: Requires an explicit `TOKEN_GUARDIAN_SECRET_KEY`; no insecure fallback secret is used
 - **Custom Services**: Extensible framework for adding more services
 - **Rotation Controls**: Explicitly pause rotation per token or stop all schedules during shutdown

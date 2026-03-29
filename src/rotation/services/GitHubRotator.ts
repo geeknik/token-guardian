@@ -350,7 +350,7 @@ export class GitHubRotator implements ServiceRotator {
       
       return token;
     } catch (error) {
-      this.logger.error('Failed to exchange code for token', { error });
+      this.logger.error('Failed to exchange code for token', { error: this.formatError(error) });
       throw new Error(`OAuth2 token exchange failed: ${this.formatError(error)}`);
     }
   }
@@ -417,7 +417,7 @@ export class GitHubRotator implements ServiceRotator {
       
       return token;
     } catch (error) {
-      this.logger.error('Failed to refresh OAuth2 token', { error });
+      this.logger.error('Failed to refresh OAuth2 token', { error: this.formatError(error) });
       throw new Error(`OAuth2 token refresh failed: ${this.formatError(error)}`);
     }
   }
@@ -866,8 +866,7 @@ export class GitHubRotator implements ServiceRotator {
       }
       
       this.logger.error('GitHub token rotation failed', {
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined
+        error: errorMessage
       });
       
       return {

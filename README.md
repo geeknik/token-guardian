@@ -140,6 +140,7 @@ These workflows will:
 ## Security
 
 TokenGuardian takes a zero-trust approach to token security. All sensitive data is encrypted at rest and in transit, and we implement defense-in-depth with multiple layers of protection.
+Operational logs redact common secret-bearing fields such as tokens, authorization headers, API keys, and client secrets.
 
 ## License
 

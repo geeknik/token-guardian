@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { EventEmitter } from 'events';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
+import { Logger } from '../utils/Logger';
 
 /**
  * Interface representing the structure of canary token alert data
@@ -47,9 +48,7 @@ interface AlertData {
  */
 interface CanaryError {
   message: string;
-  stack?: string;
   name: string;
-  cause?: unknown;
 }
 
 /**
@@ -60,6 +59,7 @@ export class CanaryService extends EventEmitter {
   private canaries: Map<string, string>;
   private webhookUrl: string | null = null;
   private alertEndpoints: Map<string, string> = new Map();
+  private readonly logger: Logger = new Logger('info');
 
   /**
    * Creates a new CanaryService
@@ -675,7 +675,7 @@ export class CanaryService extends EventEmitter {
     // Send webhook if configured
     if (this.webhookUrl) {
       this.sendWebhookAlert(alertData).catch(error => {
-        console.error('Failed to send canary webhook alert:', error);
+        this.logError('Failed to send canary webhook alert', error);
       });
     }
     
@@ -683,7 +683,7 @@ export class CanaryService extends EventEmitter {
     const endpoint = this.alertEndpoints.get(tokenName);
     if (endpoint) {
       this.sendEndpointAlert(endpoint, alertData).catch(error => {
-        console.error(`Failed to send canary alert to endpoint ${endpoint}:`, error);
+        this.logError(`Failed to send canary alert to endpoint ${endpoint}`, error);
       });
     }
   }
@@ -804,9 +804,7 @@ export class CanaryService extends EventEmitter {
   private logError(message: string, error: unknown): void {
     const errorDetails: CanaryError = {
       message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      name: error instanceof Error ? error.name : 'UnknownError',
-      cause: error instanceof Error ? error.cause : error
+      name: error instanceof Error ? error.name : 'UnknownError'
     };
     
     // Emit error event for logging/monitoring
@@ -816,7 +814,6 @@ export class CanaryService extends EventEmitter {
       timestamp: new Date().toISOString()
     });
     
-    // Log to console for development/debugging
-    console.error(`${message}:`, errorDetails);
+    this.logger.error(message, { error: errorDetails });
   }
 }

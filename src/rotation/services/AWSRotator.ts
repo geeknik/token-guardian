@@ -2,6 +2,7 @@ import { ServiceRotator } from '../ServiceRotator';
 import { RotationResult } from '../../interfaces/RotationResult';
 import crypto from 'crypto';
 import axios from 'axios';
+import { Logger } from '../../utils/Logger';
 
 /**
  * Interface representing an AWS API request
@@ -20,6 +21,7 @@ interface AWSRequest {
  * Rotator for AWS access keys
  */
 export class AWSRotator implements ServiceRotator {
+  private readonly logger: Logger = new Logger('info');
   // AWS region to use for API calls
   private region: string = 'us-east-1';
   // Endpoint for AWS STS service
@@ -99,7 +101,10 @@ export class AWSRotator implements ServiceRotator {
         await this.deleteAccessKey(newKey.accessKeyId, newKey.secretAccessKey, username, accessKeyId);
       } catch (error) {
         // Log but continue - we have new working credentials
-        console.error('Failed to delete old AWS access key:', error);
+        this.logger.warn('Failed to delete old AWS access key', {
+          username,
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
       
       // Return the new credentials

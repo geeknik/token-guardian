@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { TokenStore } from '../src/storage/TokenStore';
 import { TokenConfig } from '../src/interfaces/TokenConfig';
 
@@ -81,5 +82,52 @@ describe('TokenStore', () => {
     const auditLog = tokenStore.getAuditLog(tokenName);
     expect(auditLog.length).toBe(3); // store + update + remove
     expect(auditLog[2].action).toBe('remove');
+  });
+
+  test('should fail closed when stored ciphertext is malformed', () => {
+    const tokenName = 'test-token';
+    tokenStore.storeToken(tokenName, 'test-value', config);
+
+    const internals = tokenStore as unknown as {
+      tokens: Map<string, { value: string }>;
+    };
+    const storedToken = internals.tokens.get(tokenName);
+
+    expect(storedToken).toBeDefined();
+    storedToken!.value = 'v2:00:00:deadbeef';
+
+    expect(tokenStore.getToken(tokenName)).toBeNull();
+    expect(tokenStore.getTokenData(tokenName)).toBeNull();
+  });
+
+  test('should continue to read legacy CBC-encrypted tokens', () => {
+    const tokenName = 'legacy-token';
+    const tokenValue = 'legacy-value';
+    const iv = crypto.randomBytes(16);
+    const key = crypto.createHash('sha256').update(encryptionKey).digest().subarray(0, 32);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+
+    let encryptedValue = cipher.update(tokenValue, 'utf8', 'hex');
+    encryptedValue += cipher.final('hex');
+
+    const legacyEncryptedValue = `${iv.toString('hex')}:${encryptedValue}`;
+    const internals = tokenStore as unknown as {
+      tokens: Map<string, { value: string; config: TokenConfig; expiry: null; created: Date; lastUsed: null }>;
+    };
+
+    internals.tokens.set(tokenName, {
+      value: legacyEncryptedValue,
+      config,
+      expiry: null,
+      created: new Date(),
+      lastUsed: null
+    });
+
+    const retrieved = tokenStore.getToken(tokenName);
+
+    expect(retrieved).toEqual({
+      value: tokenValue,
+      config
+    });
   });
 });

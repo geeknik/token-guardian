@@ -20,7 +20,29 @@ describe('TokenRotator', () => {
 
     const result = await rotator.rotateToken('old-token');
 
-    expect(mockStrategy.rotateToken).toHaveBeenCalledWith('old-token');
+    expect(mockStrategy.rotateToken).toHaveBeenCalledWith('old-token', undefined);
+    expect(result).toEqual(mockResult);
+  });
+
+  it('routes rotation to the named rotator with the token identifier', async () => {
+    const rotator = new TokenRotator();
+
+    const mockResult: RotationResult = {
+      success: true,
+      message: 'rotated',
+      newToken: 'service-token',
+      newExpiry: null
+    };
+
+    const mockStrategy = {
+      rotateToken: jest.fn().mockResolvedValue(mockResult)
+    };
+
+    rotator.registerRotator('custom-service', mockStrategy);
+
+    const result = await rotator.rotateToken('old-token', 'custom-service', 'API_KEY');
+
+    expect(mockStrategy.rotateToken).toHaveBeenCalledWith('old-token', 'API_KEY');
     expect(result).toEqual(mockResult);
   });
 

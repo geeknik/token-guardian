@@ -2,6 +2,9 @@ import { DefaultRotator } from './services/DefaultRotator';
 import { RotationResult } from '../interfaces/RotationResult';
 import { Logger } from '../utils/Logger';
 import { RotationStrategy } from './RotationStrategy';
+import { ServiceRotator } from './ServiceRotator';
+import { AWSRotator } from './services/AWSRotator';
+import { GitHubRotator } from './services/GitHubRotator';
 
 /**
  * Manages token rotation using different rotation strategies
@@ -32,6 +35,18 @@ export class TokenRotator {
         clockTolerance: 0
       }
     }));
+    this.rotators.set('aws', this.wrapServiceRotator(new AWSRotator(), 'aws-token'));
+    this.rotators.set('github', this.wrapServiceRotator(new GitHubRotator(), 'github-token'));
+  }
+
+  /**
+   * Adapt a service rotator to the shared rotation strategy interface.
+   */
+  private wrapServiceRotator(rotator: ServiceRotator, defaultTokenName: string): RotationStrategy {
+    return {
+      rotateToken: (currentToken: string, tokenName?: string) =>
+        rotator.rotateToken(tokenName || defaultTokenName, currentToken)
+    };
   }
 
   /**
@@ -56,8 +71,12 @@ export class TokenRotator {
   /**
    * Rotate a token using the specified rotator
    */
-  public async rotateToken(token: string): Promise<RotationResult> {
-    const rotator = this.getRotator('default');
-    return rotator.rotateToken(token);
+  public async rotateToken(
+    token: string,
+    rotatorName: string = 'default',
+    tokenName?: string
+  ): Promise<RotationResult> {
+    const rotator = this.getRotator(rotatorName);
+    return rotator.rotateToken(token, tokenName);
   }
 }

@@ -117,7 +117,7 @@ describe('TokenGuardian', () => {
     const tokenName = 'API_KEY';
     
     const tokenConfig: TokenConfig = {
-      serviceType: 'default',
+      serviceType: 'github',
       rotationEnabled: true,
       canaryEnabled: true,
       rotationInterval: '7d'
@@ -140,7 +140,7 @@ describe('TokenGuardian', () => {
     const newToken = 'new-test-token';
     
     const tokenConfig: TokenConfig = {
-      serviceType: 'default',
+      serviceType: 'github',
       rotationEnabled: true,
       canaryEnabled: true,
       rotationInterval: '7d'
@@ -165,9 +165,10 @@ describe('TokenGuardian', () => {
     mockTokenStore.updateToken.mockReturnValue(true);
     
     const result = await tokenGuardian.rotateToken(tokenName);
-    
+
     expect(result.success).toBe(true);
     expect(result.newToken).toBe(newToken);
+    expect(mockTokenRotator.rotateToken).toHaveBeenCalledWith(token, 'github', tokenName);
     expect(mockCanaryService.embedCanary).toHaveBeenCalledWith(newToken, tokenName);
     expect(mockTokenStore.updateToken).toHaveBeenCalledWith(tokenName, newToken + '-canary', expect.any(Date));
   });

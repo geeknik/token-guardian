@@ -116,14 +116,15 @@ export class TokenStore {
     if (!tokenData) {
       return null;
     }
-    
-    // Decrypt the token value
-    const decryptedValue = this.decrypt(tokenData.value);
-    
-    return {
-      value: decryptedValue,
-      config: tokenData.config
-    };
+
+    try {
+      return {
+        value: this.decrypt(tokenData.value),
+        config: tokenData.config
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -136,12 +137,15 @@ export class TokenStore {
     if (!tokenData) {
       return null;
     }
-    
-    // Create a copy with the decrypted value
-    return {
-      ...tokenData,
-      value: this.decrypt(tokenData.value)
-    };
+
+    try {
+      return {
+        ...tokenData,
+        value: this.decrypt(tokenData.value)
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -215,14 +219,15 @@ export class TokenStore {
    * @returns Encrypted value
    */
   private encrypt(value: string): string {
-    const iv = crypto.randomBytes(16);
-    const key = crypto.createHash('sha256').update(this.encryptionKey).digest().slice(0, 32);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    
+    const iv = crypto.randomBytes(12);
+    const key = this.deriveKey();
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
     let encrypted = cipher.update(value, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
-    return `${iv.toString('hex')}:${encrypted}`;
+    const authTag = cipher.getAuthTag();
+
+    return `v2:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
   }
 
   /**
@@ -231,14 +236,57 @@ export class TokenStore {
    * @returns Decrypted value
    */
   private decrypt(encrypted: string): string {
-    const [ivHex, encryptedValue] = encrypted.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const key = crypto.createHash('sha256').update(this.encryptionKey).digest().slice(0, 32);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    
-    let decrypted = decipher.update(encryptedValue, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    return decrypted;
+    const parts = encrypted.split(':');
+
+    if (parts[0] === 'v2') {
+      const [, ivHex, authTagHex, encryptedValue] = parts;
+      if (!ivHex || !authTagHex || !encryptedValue) {
+        throw new Error('Invalid encrypted payload format');
+      }
+
+      const iv = this.parseHexBuffer(ivHex, 12);
+      const authTag = this.parseHexBuffer(authTagHex, 16);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', this.deriveKey(), iv);
+      decipher.setAuthTag(authTag);
+
+      let decrypted = decipher.update(encryptedValue, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    }
+
+    if (parts.length === 2) {
+      const [ivHex, encryptedValue] = parts;
+      const iv = this.parseHexBuffer(ivHex, 16);
+      const decipher = crypto.createDecipheriv('aes-256-cbc', this.deriveKey(), iv);
+
+      let decrypted = decipher.update(encryptedValue, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    }
+
+    throw new Error('Invalid encrypted payload format');
+  }
+
+  /**
+   * Derive a consistent 256-bit encryption key from the configured secret.
+   */
+  private deriveKey(): Buffer {
+    return crypto.createHash('sha256').update(this.encryptionKey).digest().subarray(0, 32);
+  }
+
+  /**
+   * Decode hex input while enforcing the expected size.
+   */
+  private parseHexBuffer(value: string, expectedLength: number): Buffer {
+    if (!/^[0-9a-f]+$/i.test(value) || value.length % 2 !== 0) {
+      throw new Error('Invalid encrypted payload encoding');
+    }
+
+    const buffer = Buffer.from(value, 'hex');
+    if (buffer.length !== expectedLength) {
+      throw new Error('Invalid encrypted payload size');
+    }
+
+    return buffer;
   }
 }

@@ -247,8 +247,21 @@ export class TokenGuardian {
       };
     }
     
-    const result = await this.rotator.rotateToken(tokenData.value);
-    
+    const serviceType = tokenData.config.serviceType || 'default';
+
+    let result: RotationResult;
+    try {
+      result = await this.rotator.rotateToken(tokenData.value, serviceType, tokenName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown rotation error';
+      this.logger.error(`Failed to rotate token ${tokenName}: ${message}`);
+      return {
+        success: false,
+        message,
+        newExpiry: null
+      };
+    }
+
     if (result.success && result.newToken) {
       // Update the stored token with the new value
       let newValue = result.newToken;

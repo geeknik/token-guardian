@@ -84,6 +84,7 @@ const DEFAULT_IGNORE_PATTERNS = [
 export class GitScanner {
   private patterns: TokenPattern[];
   private ignorePatterns: string[];
+  private ignoreMatchers: RegExp[];
   private logger: Logger;
 
   constructor(
@@ -93,6 +94,7 @@ export class GitScanner {
   ) {
     this.patterns = patterns;
     this.ignorePatterns = ignorePatterns;
+    this.ignoreMatchers = ignorePatterns.map(pattern => this.compileGlobPattern(pattern));
     this.logger = logger || new Logger('info');
   }
 
@@ -123,12 +125,80 @@ export class GitScanner {
    * @returns Whether the file should be ignored
    */
   private shouldIgnoreFile(filepath: string): boolean {
-    return this.ignorePatterns.some(pattern => {
-      if (pattern.startsWith('**/')) {
-        return filepath.includes(pattern.slice(3));
+    const normalizedPath = this.normalizePath(filepath);
+    return this.ignoreMatchers.some(pattern => pattern.test(normalizedPath));
+  }
+
+  /**
+   * Normalize a path for cross-platform glob matching.
+   */
+  private normalizePath(filepath: string): string {
+    return filepath.replace(/\\/g, '/').replace(/^\.\//, '');
+  }
+
+  /**
+   * Escape a string for safe inclusion in a regular expression.
+   */
+  private escapeRegExp(value: string): string {
+    return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+  }
+
+  /**
+   * Compile a simple glob into a regular expression.
+   */
+  private compileGlobPattern(pattern: string): RegExp {
+    const normalizedPattern = this.normalizePath(pattern);
+    let regex = '^';
+
+    for (let index = 0; index < normalizedPattern.length; index++) {
+      const current = normalizedPattern[index];
+
+      if (current === '*') {
+        const next = normalizedPattern[index + 1];
+        const afterNext = normalizedPattern[index + 2];
+
+        if (next === '*') {
+          regex += afterNext === '/' ? '(?:.*\\/)?' : '.*';
+          index += afterNext === '/' ? 2 : 1;
+          continue;
+        }
+
+        regex += '[^/]*';
+        continue;
       }
-      return filepath === pattern;
-    });
+
+      if (current === '?') {
+        regex += '[^/]';
+        continue;
+      }
+
+      if (current === '{') {
+        const closingBrace = normalizedPattern.indexOf('}', index);
+        if (closingBrace !== -1) {
+          const options = normalizedPattern
+            .slice(index + 1, closingBrace)
+            .split(',')
+            .map(option => this.escapeRegExp(option));
+
+          regex += `(?:${options.join('|')})`;
+          index = closingBrace;
+          continue;
+        }
+      }
+
+      regex += this.escapeRegExp(current);
+    }
+
+    regex += '$';
+    return new RegExp(regex);
+  }
+
+  /**
+   * Ensure regex patterns are global before using matchAll.
+   */
+  private toGlobalRegex(pattern: RegExp): RegExp {
+    const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+    return new RegExp(pattern.source, flags);
   }
 
   /**
@@ -155,7 +225,7 @@ export class GitScanner {
     const results: ScanResult[] = [];
 
     for (const pattern of this.patterns) {
-      const matches = line.matchAll(pattern.regex);
+      const matches = line.matchAll(this.toGlobalRegex(pattern.regex));
       
       for (const match of matches) {
         const token = match[1] || match[0];
@@ -277,5 +347,6 @@ export class GitScanner {
    */
   public addIgnorePattern(pattern: string): void {
     this.ignorePatterns.push(pattern);
+    this.ignoreMatchers.push(this.compileGlobPattern(pattern));
   }
-} 
+}

@@ -107,9 +107,10 @@ Rotation intervals are validated (positive integers followed by `d`, `h`, `m`, o
 
 Embed undetectable canary markers in your tokens to be alerted when they're used outside your authorized systems. Supports clever embedding in:
 
-- JWT tokens (preserves functionality while adding tracking)
 - Long string tokens (minimal modifications that maintain functionality)
 - Multiple format-specific strategies for optimal tracking
+
+JWTs are left unchanged to preserve signature validity; TokenGuardian does not mutate signed JWT payloads for canary tracking.
 
 ### 🔐 Token Storage
 

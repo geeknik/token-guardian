@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import { EventEmitter } from 'events';
 import axios from 'axios';
-import jwt from 'jsonwebtoken';
 import { Logger } from '../utils/Logger';
 
 /**
@@ -98,18 +97,18 @@ export class CanaryService extends EventEmitter {
     if (!this.enabled) {
       return token;
     }
-    
-    // Generate a unique canary ID for this token
-    const canaryId = this.generateCanaryId(tokenValue);
-    
-    // Store the canary ID for future reference
-    this.canaries.set(canaryId, tokenValue);
-    
-    // Determine how to embed the canary based on token format
+
+    // JWT payload mutation would invalidate the signature, so leave JWTs untouched.
     if (token.includes('.') && token.split('.').length === 3) {
-      // Looks like a JWT, embed in the payload
-      return this.embedInJWT(token, canaryId);
+      this.logger.warn('Skipping canary embedding for JWT token to preserve signature validity');
+      return token;
     } else if (token.length > 20) {
+      // Generate a unique canary ID for this token
+      const canaryId = this.generateCanaryId(tokenValue);
+
+      // Store the canary ID for future reference
+      this.canaries.set(canaryId, tokenValue);
+
       // For long tokens, embed as a subtle modification
       return this.embedInGenericToken(token, canaryId);
     } else {
@@ -135,89 +134,6 @@ export class CanaryService extends EventEmitter {
   }
 
   /**
-   * Embeds a canary ID in a JWT token
-   * @param token The JWT token
-   * @param canaryId The canary ID to embed
-   * @returns Modified JWT with embedded canary
-   */
-  private embedInJWT(token: string, canaryId: string): string {
-    try {
-      const [header, payload, signature] = token.split('.');
-      
-      // Decode the payload
-      const decodedPayload = Buffer.from(payload, 'base64').toString('utf-8');
-      
-      try {
-        // Try to parse as JSON
-        const payloadObj = JSON.parse(decodedPayload);
-        
-        // Add the canary as a custom claim
-        // Use a name that looks innocuous but unique
-        payloadObj._cid = canaryId;
-        
-        // Encode the modified payload
-        const newPayload = Buffer.from(JSON.stringify(payloadObj))
-          .toString('base64')
-          .replace(/=/g, '')
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_');
-        
-        // Return the modified JWT
-        // Note: This breaks the signature, but since we're just monitoring for leaks, it's acceptable
-        return `${header}.${newPayload}.${signature}`;
-      } catch (error) {
-        // Log error and handle appropriately
-        this.logError('Failed to parse JWT payload', error);
-        // Try alternative embedding method
-        const modifiedPayload = this.embedBase64Marker(payload, canaryId);
-        return `${header}.${modifiedPayload}.${signature}`;
-      }
-    } catch (error) {
-      // Log error and handle appropriately
-      this.logError('Failed to parse JWT for canary detection', error);
-      // Continue to try other detection methods
-      return token;
-    }
-  }
-
-  /**
-   * Embeds a marker in base64 encoded data
-   * @param base64Data The base64 data to modify
-   * @param marker The marker to embed
-   * @returns Modified base64 data
-   */
-  private embedBase64Marker(base64Data: string, marker: string): string {
-    // Decode base64 to binary data
-    const binaryData = Buffer.from(base64Data, 'base64');
-    const dataLength = binaryData.length;
-    
-    // Only modify if we have enough data (at least 32 bytes)
-    if (dataLength >= 32) {
-      // Convert marker to binary
-      const markerBinary = Buffer.from(marker, 'utf8');
-      
-      // Choose a position that's 1/3 into the data
-      const position = Math.floor(dataLength / 3);
-      
-      // Create a new buffer with the marker embedded
-      // XOR the marker data with existing data to avoid breaking functionality
-      for (let i = 0; i < markerBinary.length && i + position < dataLength; i++) {
-        // Subtle XOR that preserves most of the original value
-        // Only modifies the 2 least significant bits
-        binaryData[position + i] = (binaryData[position + i] & 0xFC) | (markerBinary[i] & 0x03);
-      }
-      
-      // Convert back to base64, ensuring same format as JWT expects
-      return binaryData.toString('base64')
-        .replace(/=/g, '')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_');
-    }
-    
-    return base64Data;
-  }
-
-  /**
    * Embeds a canary ID in a generic token
    * @param token The token
    * @param canaryId The canary ID to embed
@@ -225,12 +141,12 @@ export class CanaryService extends EventEmitter {
    */
   private embedInGenericToken(token: string, canaryId: string): string {
     // First, determine the token type to choose the best embedding strategy
-    if (/^[A-Za-z0-9+/=]+$/.test(token)) {
-      // Looks like base64, use our binary embedding technique
-      return this.embedBase64Token(token, canaryId);
-    } else if (/^[A-Fa-f0-9]+$/.test(token)) {
+    if (/^[A-Fa-f0-9]+$/.test(token)) {
       // Looks like hex, use hex embedding technique
       return this.embedHexToken(token, canaryId);
+    } else if (/^[A-Za-z0-9+/=]+$/.test(token)) {
+      // Looks like base64, use our binary embedding technique
+      return this.embedBase64Token(token, canaryId);
     } else {
       // Mixed character token, use unicode embedding
       return this.embedMixedToken(token, canaryId);
@@ -355,40 +271,25 @@ export class CanaryService extends EventEmitter {
       return null;
     }
     
-    // Check if it's a JWT
+    // JWT canaries are intentionally not embedded because that would invalidate signatures.
+    // Skip JWT detection here to avoid false confidence around unchanged tokens.
     if (token.includes('.') && token.split('.').length === 3) {
+      return null;
+    }
+
+    if (/^[A-Fa-f0-9]+$/.test(token)) {
+      // Try hex token detection
       try {
-        const decoded = jwt.decode(token, { complete: true });
-        if (!decoded || typeof decoded !== 'object') {
-          throw new Error('Invalid JWT format');
-        }
-        
-        try {
-          const payload = decoded.payload;
-          if (typeof payload === 'object' && payload !== null) {
-            const possibleCanary = this.extractJWTCanary(payload);
-            if (possibleCanary && this.canaries.has(possibleCanary)) {
-              const tokenName = this.canaries.get(possibleCanary) || null;
-              if (tokenName) {
-                this.triggerAlert(tokenName, token, 'jwt_standard');
-              }
-              return tokenName;
-            }
+        const possibleCanary = this.extractHexTokenCanary(token);
+        if (possibleCanary && this.canaries.has(possibleCanary)) {
+          const tokenName = this.canaries.get(possibleCanary) || null;
+          if (tokenName) {
+            this.triggerAlert(tokenName, token, 'hex');
           }
-        } catch (error) {
-          this.logError('Failed to extract JWT canary from payload', error);
-          // Try binary analysis as fallback
-          const possibleCanary = this.extractBase64Marker(token);
-          if (possibleCanary && this.canaries.has(possibleCanary)) {
-            const tokenName = this.canaries.get(possibleCanary) || null;
-            if (tokenName) {
-              this.triggerAlert(tokenName, token, 'jwt_binary');
-            }
-            return tokenName;
-          }
+          return tokenName;
         }
       } catch (error) {
-        this.logError('Failed to decode JWT for canary detection', error);
+        this.logError('Failed to extract hex token canary', error);
         // Continue to try other detection methods
       }
     } else if (/^[A-Za-z0-9+/=]+$/.test(token)) {
@@ -404,21 +305,6 @@ export class CanaryService extends EventEmitter {
         }
       } catch (error) {
         this.logError('Failed to extract base64 token canary', error);
-        // Continue to try other detection methods
-      }
-    } else if (/^[A-Fa-f0-9]+$/.test(token)) {
-      // Try hex token detection
-      try {
-        const possibleCanary = this.extractHexTokenCanary(token);
-        if (possibleCanary && this.canaries.has(possibleCanary)) {
-          const tokenName = this.canaries.get(possibleCanary) || null;
-          if (tokenName) {
-            this.triggerAlert(tokenName, token, 'hex');
-          }
-          return tokenName;
-        }
-      } catch (error) {
-        this.logError('Failed to extract hex token canary', error);
         // Continue to try other detection methods
       }
     } else {
@@ -439,66 +325,6 @@ export class CanaryService extends EventEmitter {
     }
     
     return null;
-  }
-
-  /**
-   * Extract canary ID from JWT payload
-   * @param payload The JWT payload object
-   * @returns Extracted canary ID or null
-   */
-  private extractJWTCanary(payload: Record<string, unknown>): string | null {
-    // Check for direct canary ID in payload
-    if (payload._cid && typeof payload._cid === 'string') {
-      return payload._cid;
-    }
-
-    // Check for embedded canary in custom claims
-    for (const [, value] of Object.entries(payload)) {
-      if (typeof value === 'string' && this.canaries.has(value)) {
-        return value;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Extract canary marker from base64 data
-   * @param base64Data The base64 data to check
-   * @returns Extracted canary ID or null
-   */
-  private extractBase64Marker(base64Data: string): string | null {
-    try {
-      // Convert to properly padded base64 if needed
-      const paddedBase64 = base64Data.replace(/-/g, '+').replace(/_/g, '/');
-      const paddedLength = paddedBase64.length;
-      const paddingNeeded = paddedLength % 4 ? 4 - (paddedLength % 4) : 0;
-      const fullyPadded = paddedBase64 + '='.repeat(paddingNeeded);
-      
-      // Decode to binary
-      const binaryData = Buffer.from(fullyPadded, 'base64');
-      
-      if (binaryData.length < 32) {return null;}
-      
-      // Calculate the position where we embedded the marker (1/3 into the data)
-      const position = Math.floor(binaryData.length / 3);
-      
-      // Extract the marker (up to 8 bytes)
-      const markerLength = Math.min(8, binaryData.length - position);
-      const markerBuffer = Buffer.alloc(markerLength);
-      
-      // Reverse the XOR operation we did during embedding
-      for (let i = 0; i < markerLength; i++) {
-        // Extract the 2 least significant bits
-        markerBuffer[i] = binaryData[position + i] & 0x03;
-      }
-      
-      // Convert to string and return
-      return markerBuffer.toString('utf8').replace(/\0/g, '');
-    } catch (extractError) {
-      this.logError('Failed to extract base64 marker', extractError);
-      return null;
-    }
   }
 
   /**

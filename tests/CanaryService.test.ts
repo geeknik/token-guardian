@@ -1,3 +1,4 @@
+import { sign, verify } from 'jsonwebtoken';
 import { CanaryService } from '../src/canary/CanaryService';
 
 describe('CanaryService', () => {
@@ -7,15 +8,33 @@ describe('CanaryService', () => {
     canaryService = new CanaryService(true);
   });
 
-  test('should embed and detect canary in token', () => {
+  test('should embed and detect canary in a long hex token', () => {
     const tokenName = 'test_token';
-    const originalToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+    const originalToken = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
     
     const tokenWithCanary = canaryService.embedCanary(originalToken, tokenName);
     expect(tokenWithCanary).not.toBe(originalToken);
     
     const detectedTokenName = canaryService.detectCanary(tokenWithCanary);
     expect(detectedTokenName).toBe(tokenName);
+  });
+
+  test('should not modify JWT tokens because canary embedding would invalidate the signature', () => {
+    const secret = 'jwt-secret';
+    const originalToken = sign({ sub: 'user-123' }, secret, {
+      issuer: 'token-guardian',
+      audience: 'default',
+      expiresIn: 3600
+    });
+
+    const tokenWithCanary = canaryService.embedCanary(originalToken, 'jwt-token');
+
+    expect(tokenWithCanary).toBe(originalToken);
+    expect(canaryService.detectCanary(tokenWithCanary)).toBeNull();
+    expect(() => verify(tokenWithCanary, secret, {
+      issuer: 'token-guardian',
+      audience: 'default'
+    })).not.toThrow();
   });
 
   test('should not modify short tokens', () => {

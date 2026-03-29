@@ -95,6 +95,7 @@ TokenGuardian can detect over 150 different token formats, including:
 TokenGuardian provides actual working rotation for supported services:
 
 - **AWS IAM Keys**: Securely rotates IAM access keys with proper verification
+  AWS IAM responses are validated against the expected result blocks before new key material is accepted.
 - **GitHub Tokens**: PAT rotation is disabled by design; use OAuth refresh tokens or GitHub App credentials instead
 - **Default JWT Rotation**: Requires an explicit `TOKEN_GUARDIAN_SECRET_KEY`; no insecure fallback secret is used
 - **Custom Services**: Extensible framework for adding more services

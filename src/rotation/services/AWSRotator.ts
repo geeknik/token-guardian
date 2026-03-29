@@ -204,17 +204,7 @@ export class AWSRotator implements ServiceRotator {
     });
     
     // Parse XML response to extract key IDs
-    const xml = response.data;
-    const keys: string[] = [];
-    
-    // Use regex to extract access key IDs from XML
-    const regex = /<AccessKeyId>([^<]+)<\/AccessKeyId>/g;
-    let match;
-    while ((match = regex.exec(xml)) !== null) {
-      keys.push(match[1]);
-    }
-    
-    return keys;
+    return this.parseAccessKeyListResponse(response.data);
   }
   
   /**
@@ -253,19 +243,7 @@ export class AWSRotator implements ServiceRotator {
     });
     
     // Parse XML response to extract new key details
-    const xml = response.data;
-    
-    const accessKeyIdMatch = /<AccessKeyId>([^<]+)<\/AccessKeyId>/.exec(xml);
-    const secretAccessKeyMatch = /<SecretAccessKey>([^<]+)<\/SecretAccessKey>/.exec(xml);
-    
-    if (!accessKeyIdMatch || !accessKeyIdMatch[1] || !secretAccessKeyMatch || !secretAccessKeyMatch[1]) {
-      throw new Error('Could not extract new access key from response');
-    }
-    
-    return {
-      accessKeyId: accessKeyIdMatch[1],
-      secretAccessKey: secretAccessKeyMatch[1]
-    };
+    return this.parseCreateAccessKeyResponse(response.data);
   }
   
   /**
@@ -299,10 +277,12 @@ export class AWSRotator implements ServiceRotator {
     
     const signedRequest = this.signAwsRequest(request, accessKeyId, secretAccessKey);
     
-    await axios.get(this.iamEndpoint, {
+    const response = await axios.get(this.iamEndpoint, {
       params: request.params,
       headers: signedRequest.headers
     });
+
+    this.assertSuccessfulDeleteResponse(response.data);
   }
   
   /**
@@ -357,18 +337,17 @@ export class AWSRotator implements ServiceRotator {
       .sort()
       .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
       .join('&');
-    
+
+    const normalizedHeaders = this.normalizeHeaders(request.headers);
+
     // Create canonical headers
-    const canonicalHeaders = Object.keys(request.headers)
-      .map(key => key.toLowerCase())
-      .sort()
-      .map(key => `${key}:${request.headers[key].trim()}`)
+    const canonicalHeaders = normalizedHeaders
+      .map(([key, value]) => `${key}:${value}`)
       .join('\n') + '\n';
-    
+
     // Create signed headers list
-    const signedHeaders = Object.keys(request.headers)
-      .map(key => key.toLowerCase())
-      .sort()
+    const signedHeaders = normalizedHeaders
+      .map(([key]) => key)
       .join(';');
     
     // Combine canonical components
@@ -380,6 +359,76 @@ export class AWSRotator implements ServiceRotator {
       signedHeaders,
       'UNSIGNED-PAYLOAD'
     ].join('\n');
+  }
+
+  /**
+   * Normalize request headers for deterministic AWS SigV4 signing.
+   */
+  private normalizeHeaders(headers: Record<string, string>): Array<[string, string]> {
+    return Object.entries(headers)
+      .map(([key, value]) => [key.toLowerCase(), value.trim().replace(/\s+/g, ' ')] as [string, string])
+      .sort(([left], [right]) => left.localeCompare(right));
+  }
+
+  /**
+   * Parse ListAccessKeys XML and return only keys from the expected result block.
+   */
+  private parseAccessKeyListResponse(xml: string): string[] {
+    const metadataBlock = this.extractXmlBlock(xml, 'ListAccessKeysResult');
+    const keys: string[] = [];
+    const regex = /<AccessKeyId>([^<]+)<\/AccessKeyId>/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(metadataBlock)) !== null) {
+      keys.push(match[1]);
+    }
+
+    return keys;
+  }
+
+  /**
+   * Parse CreateAccessKey XML and fail closed if the expected result block is missing.
+   */
+  private parseCreateAccessKeyResponse(xml: string): { accessKeyId: string; secretAccessKey: string } {
+    const resultBlock = this.extractXmlBlock(xml, 'CreateAccessKeyResult');
+    const accessKeyIdMatch = /<AccessKeyId>([^<]+)<\/AccessKeyId>/.exec(resultBlock);
+    const secretAccessKeyMatch = /<SecretAccessKey>([^<]+)<\/SecretAccessKey>/.exec(resultBlock);
+
+    if (!accessKeyIdMatch?.[1] || !secretAccessKeyMatch?.[1]) {
+      throw new Error('Could not extract new access key from response');
+    }
+
+    return {
+      accessKeyId: accessKeyIdMatch[1],
+      secretAccessKey: secretAccessKeyMatch[1]
+    };
+  }
+
+  /**
+   * Validate that DeleteAccessKey returned the expected success envelope.
+   */
+  private assertSuccessfulDeleteResponse(xml: string): void {
+    this.extractXmlBlock(xml, 'DeleteAccessKeyResponse');
+  }
+
+  /**
+   * Extract a top-level XML block and reject AWS error responses or malformed payloads.
+   */
+  private extractXmlBlock(xml: string, tagName: string): string {
+    if (typeof xml !== 'string' || !xml.trim()) {
+      throw new Error('AWS response was empty or malformed');
+    }
+
+    if (/<ErrorResponse\b/.test(xml) || /<Error\b/.test(xml)) {
+      throw new Error('AWS API returned an error response');
+    }
+
+    const match = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)</${tagName}>`).exec(xml);
+    if (!match?.[1]) {
+      throw new Error(`AWS response did not contain expected ${tagName} block`);
+    }
+
+    return match[1];
   }
   
   /**

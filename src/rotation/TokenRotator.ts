@@ -23,18 +23,25 @@ export class TokenRotator {
    * Initialize default rotators
    */
   private initializeRotators(): void {
-    this.rotators.set('default', new DefaultRotator({
-      secretKey: process.env.TOKEN_GUARDIAN_SECRET_KEY || 'default-secret-key',
-      expiresIn: 3600,
-      issuer: 'token-guardian',
-      audience: 'default',
-      validationOptions: {
-        verifyExpiration: true,
-        verifyIssuer: true,
-        verifyAudience: true,
-        clockTolerance: 0
-      }
-    }));
+    const secretKey = process.env.TOKEN_GUARDIAN_SECRET_KEY;
+
+    if (secretKey) {
+      this.rotators.set('default', new DefaultRotator({
+        secretKey,
+        expiresIn: 3600,
+        issuer: 'token-guardian',
+        audience: 'default',
+        validationOptions: {
+          verifyExpiration: true,
+          verifyIssuer: true,
+          verifyAudience: true,
+          clockTolerance: 0
+        }
+      }));
+    } else {
+      this.logger.warn('Default JWT rotator disabled because TOKEN_GUARDIAN_SECRET_KEY is not set');
+    }
+
     this.rotators.set('aws', this.wrapServiceRotator(new AWSRotator(), 'aws-token'));
     this.rotators.set('github', this.wrapServiceRotator(new GitHubRotator(), 'github-token'));
   }

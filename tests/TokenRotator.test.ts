@@ -2,6 +2,16 @@ import { TokenRotator } from '../src/rotation/TokenRotator';
 import { RotationResult } from '../src/interfaces/RotationResult';
 
 describe('TokenRotator', () => {
+  const originalSecretKey = process.env.TOKEN_GUARDIAN_SECRET_KEY;
+
+  afterEach(() => {
+    if (originalSecretKey === undefined) {
+      delete process.env.TOKEN_GUARDIAN_SECRET_KEY;
+    } else {
+      process.env.TOKEN_GUARDIAN_SECRET_KEY = originalSecretKey;
+    }
+  });
+
   it('delegates rotation to the registered rotator', async () => {
     const rotator = new TokenRotator();
 
@@ -53,5 +63,13 @@ describe('TokenRotator', () => {
     rotator.registerRotator('custom', mockStrategy);
 
     expect(rotator.getRotator('custom')).toBe(mockStrategy);
+  });
+
+  it('fails closed when the default JWT rotator secret is not configured', () => {
+    delete process.env.TOKEN_GUARDIAN_SECRET_KEY;
+
+    const rotator = new TokenRotator();
+
+    expect(() => rotator.getRotator('default')).toThrow('Rotator not found: default');
   });
 });

@@ -27,6 +27,12 @@ TokenGuardian provides multi-layered protection for your tokens and secrets:
 npm install token-guardian
 ```
 
+For default JWT rotation, set an explicit signing secret before using the built-in `default` rotator:
+
+```bash
+export TOKEN_GUARDIAN_SECRET_KEY="$(openssl rand -hex 32)"
+```
+
 ## Usage
 
 ```typescript
@@ -89,6 +95,7 @@ TokenGuardian provides actual working rotation for supported services:
 
 - **AWS IAM Keys**: Securely rotates IAM access keys with proper verification
 - **GitHub Tokens**: Full API-based rotation with scope preservation
+- **Default JWT Rotation**: Requires an explicit `TOKEN_GUARDIAN_SECRET_KEY`; no insecure fallback secret is used
 - **Custom Services**: Extensible framework for adding more services
 - **Rotation Controls**: Explicitly pause rotation per token or stop all schedules during shutdown
 
@@ -104,9 +111,10 @@ Embed undetectable canary markers in your tokens to be alerted when they're used
 
 ### 🔐 Token Storage
 
-All sensitive data is encrypted at rest using AES-256-CBC with:
+All sensitive data is encrypted at rest using AES-256-GCM authenticated encryption with:
 - Per-token encryption to minimize exposure
 - Secure key derivation
+- Tamper detection on decrypt
 - Comprehensive audit logging
 
 ### 🌐 Token Fingerprinting
